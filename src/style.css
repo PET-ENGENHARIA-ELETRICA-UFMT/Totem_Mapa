@@ -1,0 +1,435 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===================================================================
+   VARIÁVEIS (DESIGN TOKENS) E ROOT
+   =================================================================== */
+:root {
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-input: #f1f5f9;
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --border-color: rgba(0, 0, 0, 0.06);
+  --bg-active: #eff6ff;
+  --text-active: #2563eb;
+  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+  --focus-ring: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+html.dark {
+  --bg-panel: #1a1f2e;
+  --bg-panel-hover: #22293d;
+  --bg-sidebar: #0d1117;
+  --bg-input: #111622;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --bg-active: rgba(37, 99, 235, 0.15);
+  --text-active: #60a5fa;
+  --shadow-premium: 0 15px 40px -15px rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 4px rgba(96, 165, 250, 0.2);
+}
+
+/* ===================================================================
+   ESTILOS GERAIS
+   =================================================================== */
+body, html {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Transições de Tema Suaves */
+.bg-white,
+.bg-slate-50,
+#sidebar,
+#sidebar > div,
+.category-card,
+.floor-btn,
+button,
+select,
+input,
+.leaflet-popup-content-wrapper,
+.custom-popup,
+#navigation-bar > div,
+.map-notification {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ===================================================================
+   SIDEBAR COMPORTAMENTO SLIDE
+   =================================================================== */
+#sidebar.collapsed {
+  transform: translateX(calc(-100% - 2rem));
+}
+
+#sidebar.collapsed #sidebar-toggle-icon {
+  transform: rotate(180deg);
+}
+
+/* ===================================================================
+   TABS E ACTIVE STATES
+   =================================================================== */
+.tab-btn.active {
+  background-color: var(--bg-panel);
+  color: var(--text-active);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-color);
+}
+
+html.dark .tab-btn.active {
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+}
+
+/* ===================================================================
+   CATEGORY SELECTION & CARDS
+   =================================================================== */
+.category-card {
+  background-color: var(--bg-panel);
+  border-color: var(--border-color);
+}
+
+.category-card:hover {
+  border-color: var(--text-active);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-premium);
+}
+
+/* ===================================================================
+   AUTOCOMPLETE E SEARCH SUGGESTIONS
+   =================================================================== */
+.suggestion-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item:focus {
+  background-color: var(--bg-panel-hover);
+  outline: none;
+}
+
+/* ===================================================================
+   MAP FILTERS (DARK MODE MAP EFFECT)
+   =================================================================== */
+html.dark #map-container {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+  transition: filter 0.5s ease-in-out;
+}
+
+#map-container {
+  transition: filter 0.5s ease-in-out;
+}
+
+/* ===================================================================
+   LEAFLET POPUPS CUSTOMIZATION (GLASSMORPHIC & THEME-AWARE)
+   =================================================================== */
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel) !important;
+  color: var(--text-main) !important;
+  border-radius: 24px !important;
+  box-shadow: var(--shadow-premium) !important;
+  border: 1px solid var(--border-color) !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+.leaflet-popup-tip-container {
+  display: none !important;
+}
+
+/* Custom popup inner styling */
+.custom-popup {
+  width: 280px;
+}
+
+.custom-popup .popup-image {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.custom-popup .popup-content {
+  padding: 16px;
+}
+
+.custom-popup .popup-header {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+.custom-popup .popup-details {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.custom-popup .popup-details b {
+  color: var(--text-main);
+}
+
+.custom-popup .popup-button {
+  width: 100%;
+  padding: 10px;
+  background-color: #2563eb;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.custom-popup .popup-button:hover {
+  background-color: #1d4ed8;
+}
+
+.custom-popup .popup-button:active {
+  transform: scale(0.97);
+}
+
+/* ===================================================================
+   FLOOR SELECTOR AND MAP BUTTON CONTROLES
+   =================================================================== */
+.floor-btn.active-floor {
+  background-color: #2563eb !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+}
+
+/* ===================================================================
+   FLOOR SLAB BACKGROUND (NÃO SELECIONÁVEL / BASE ARQUITETURAL)
+   =================================================================== */
+.floor-slab-background,
+.floor-slab-background path {
+  pointer-events: none !important;
+  cursor: default !important;
+  outline: none !important;
+}
+
+/* ===================================================================
+   SALAS INTERATIVAS
+   =================================================================== */
+.sala-polygon-interactive,
+path.sala-polygon-interactive {
+  cursor: pointer !important;
+  transition: fill-opacity 0.2s ease, stroke-width 0.2s ease;
+}
+
+.sala-polygon-interactive:hover,
+path.sala-polygon-interactive:hover {
+  fill-opacity: 0.75 !important;
+  stroke: #2563eb !important;
+  stroke-width: 2.5px !important;
+}
+
+/* ===================================================================
+   LABELS DE SALAS NO MAPA (LEAFLET DIVICON)
+   =================================================================== */
+.sala-label {
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  font-weight: 800;
+  color: #003366;
+  text-shadow: 1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff;
+  text-align: center;
+  pointer-events: none;
+}
+
+html.dark .sala-label {
+  color: #93c5fd;
+  text-shadow: 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000;
+}
+
+/* ===================================================================
+   POI MARKERS (PONTOS DE INTERESSE)
+   =================================================================== */
+.poi-marker {
+  background-color: #475569;
+  color: white;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.poi-marker:hover {
+  transform: scale(1.15);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+  z-index: 1000 !important;
+}
+
+.poi-marker-banheiro {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+
+.poi-marker-elevador {
+  background: linear-gradient(135deg, #a855f7, #6b21a8);
+}
+
+.poi-marker-rampa {
+  background: linear-gradient(135deg, #10b981, #047857);
+}
+
+.poi-marker-escada {
+  background: linear-gradient(135deg, #f59e0b, #b45309);
+}
+
+.poi-marker-totem {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  animation: marker-pulse 2s infinite;
+  border: 3px solid white;
+}
+
+@keyframes marker-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+/* ===================================================================
+   LOCALIZAÇÃO DO USUÁRIO
+   =================================================================== */
+.user-location-marker {
+  font-size: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: user-pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes user-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Leaflet Locate Control styles mapping */
+.leaflet-control-locate a {
+  color: var(--text-main) !important;
+  background-color: var(--bg-panel) !important;
+}
+
+/* ===================================================================
+   NOTIFICAÇÕES TOAST
+   =================================================================== */
+.map-notification {
+  animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slideIn {
+  from { transform: translateY(100px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100px); opacity: 0; }
+}
+
+/* ===================================================================
+   SCROLLBAR E OUTROS UTILITÁRIOS
+   =================================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Route instructions timeline steps */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: var(--bg-active);
+  color: var(--text-active);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+#list-instructions li {
+  display: flex;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  position: relative;
+}
+
+#list-instructions li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 20px;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--border-color);
+}
+
+/* ===================================================================
+   SUPER ZOOM E ESTABILIDADE DE TILES LEAFLET
+   =================================================================== */
+.leaflet-tile {
+  will-change: transform, opacity;
+}
+
+/* Otimização de nitidez em super zoom */
+.high-zoom-crisp .leaflet-tile-container img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: auto;
+}
+
+#map-container {
+  touch-action: pinch-zoom;
+}
+

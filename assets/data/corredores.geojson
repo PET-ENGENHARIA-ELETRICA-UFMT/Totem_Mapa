@@ -1,0 +1,893 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_01",
+        "origem": "entrada_principal_escada_inicio",
+        "destino": "ponto_corredor_01",
+        "distancia_m": 98.7,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065215,
+            -15.608278
+          ],
+          [
+            -56.064615,
+            -15.608981
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_02",
+        "origem": "ponto_corredor_01",
+        "destino": "ponto_corredor_02",
+        "distancia_m": 13.4,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064615,
+            -15.608981
+          ],
+          [
+            -56.064499,
+            -15.608935
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_03",
+        "origem": "ponto_corredor_02",
+        "destino": "ponto_corredor_03",
+        "distancia_m": 58.6,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064499,
+            -15.608935
+          ],
+          [
+            -56.064004,
+            -15.608718
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_04",
+        "origem": "ponto_corredor_03",
+        "destino": "ponto_corredor_04",
+        "distancia_m": 33.1,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064004,
+            -15.608718
+          ],
+          [
+            -56.063962,
+            -15.608422
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_05",
+        "origem": "ponto_corredor_04",
+        "destino": "ponto_corredor_05",
+        "distancia_m": 20.6,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.063962,
+            -15.608422
+          ],
+          [
+            -56.063964,
+            -15.608236
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_06",
+        "origem": "ponto_corredor_05",
+        "destino": "ponto_corredor_06",
+        "distancia_m": 65.5,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.063964,
+            -15.608236
+          ],
+          [
+            -56.06438,
+            -15.607805
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_07",
+        "origem": "ponto_corredor_06",
+        "destino": "ponto_corredor_07",
+        "distancia_m": 17.1,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.06438,
+            -15.607805
+          ],
+          [
+            -56.064494,
+            -15.60791
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_08",
+        "origem": "ponto_corredor_07",
+        "destino": "saida_rodoviaria",
+        "distancia_m": 46.2,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064494,
+            -15.60791
+          ],
+          [
+            -56.064833,
+            -15.608154
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_10",
+        "origem": "entrada_principal_escada_inicio",
+        "destino": "ponto_corredor_08",
+        "distancia_m": 21.3,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065215,
+            -15.608278
+          ],
+          [
+            -56.065334,
+            -15.608134
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_11",
+        "origem": "ponto_corredor_08",
+        "destino": "ponto_corredor_09",
+        "distancia_m": 26.8,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065333,
+            -15.608134
+          ],
+          [
+            -56.065125,
+            -15.607974
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_12",
+        "origem": "ponto_corredor_09",
+        "destino": "ponto_corredor_10",
+        "distancia_m": 14.7,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065125,
+            -15.607974
+          ],
+          [
+            -56.065038,
+            -15.608071
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_19",
+        "origem": "ponto_corredor_10",
+        "destino": "entrada_rodoviaria",
+        "distancia_m": 21.8,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065038,
+            -15.608071
+          ],
+          [
+            -56.064909,
+            -15.608214
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_escada_faet_01",
+        "origem": "entrada_principal_escada_inicio",
+        "destino": "entrada_principal_escada_fim",
+        "distancia_m": 10.5,
+        "acessivel": false,
+        "tipo": "escada",
+        "andar": 0,
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065215,
+            -15.608277
+          ],
+          [
+            -56.065105,
+            -15.608194
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_15",
+        "origem": "entrada_principal_escada_fim",
+        "destino": "corredor_mofao",
+        "distancia_m": 15.6,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065105,
+            -15.608194
+          ],
+          [
+            -56.065009,
+            -15.608295
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_16",
+        "origem": "corredor_mofao",
+        "destino": "entrada_rodoviaria",
+        "distancia_m": 13.9,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.065009,
+            -15.608295
+          ],
+          [
+            -56.064909,
+            -15.608215
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_17",
+        "origem": "entrada_rodoviaria",
+        "destino": "saida_rodoviaria",
+        "distancia_m": 10.7,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064909,
+            -15.608215
+          ],
+          [
+            -56.064833,
+            -15.608154
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_18",
+        "origem": "saida_rodoviaria",
+        "destino": "ponto_corredor_11",
+        "distancia_m": 18.7,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064833,
+            -15.608154
+          ],
+          [
+            -56.064727,
+            -15.608287
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_20",
+        "origem": "ponto_corredor_11",
+        "destino": "nuvem",
+        "distancia_m": 5.1,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064727,
+            -15.608287
+          ],
+          [
+            -56.064696,
+            -15.608321
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_21",
+        "origem": "saida_rodoviaria",
+        "destino": "ponto_corredor_10",
+        "distancia_m": 31.8,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064833,
+            -15.608154
+          ],
+          [
+            -56.064957,
+            -15.60801
+          ],
+          [
+            -56.065038,
+            -15.608071
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_22",
+        "origem": "entrada_rodoviaria",
+        "destino": "ponto_corredor_11",
+        "distancia_m": 28.2,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064909,
+            -15.608215
+          ],
+          [
+            -56.0648,
+            -15.608342
+          ],
+          [
+            -56.064727,
+            -15.608287
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_23",
+        "origem": "nuvem",
+        "destino": "ponto_corredor_12",
+        "distancia_m": 13.3,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064696,
+            -15.608321
+          ],
+          [
+            -56.064634,
+            -15.608383
+          ],
+          [
+            -56.064609,
+            -15.608406
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_24",
+        "origem": "ponto_corredor_12",
+        "destino": "ponto_corredor_13",
+        "distancia_m": 18.6,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064609,
+            -15.608406
+          ],
+          [
+            -56.064745,
+            -15.60851
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_25",
+        "origem": "ponto_corredor_12",
+        "destino": "ponto_corredor_14",
+        "distancia_m": 64.0,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064609,
+            -15.608406
+          ],
+          [
+            -56.064412,
+            -15.608599
+          ],
+          [
+            -56.06447,
+            -15.608644
+          ],
+          [
+            -56.064661,
+            -15.608788
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_26",
+        "origem": "ponto_corredor_15",
+        "destino": "ponto_corredor_07",
+        "distancia_m": 16.9,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064583,
+            -15.607785
+          ],
+          [
+            -56.064494,
+            -15.60791
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_27",
+        "origem": "ponto_corredor_07",
+        "destino": "ponto_corredor_16",
+        "distancia_m": 57.0,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064494,
+            -15.60791
+          ],
+          [
+            -56.064141,
+            -15.608294
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_28",
+        "origem": "ponto_corredor_06",
+        "destino": "ponto_corredor_17",
+        "distancia_m": 20.3,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.06438,
+            -15.607805
+          ],
+          [
+            -56.064221,
+            -15.607705
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_29",
+        "origem": "ponto_corredor_17",
+        "destino": "ponto_corredor_18",
+        "distancia_m": 28.5,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064221,
+            -15.607705
+          ],
+          [
+            -56.064054,
+            -15.607904
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_30",
+        "origem": "ponto_corredor_18",
+        "destino": "ponto_corredor_20",
+        "distancia_m": 53.6,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064054,
+            -15.607904
+          ],
+          [
+            -56.063741,
+            -15.60828
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_31",
+        "origem": "ponto_corredor_17",
+        "destino": "ponto_corredor_21",
+        "distancia_m": 21.1,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064221,
+            -15.607705
+          ],
+          [
+            -56.06435,
+            -15.607562
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_32",
+        "origem": "ponto_corredor_18",
+        "destino": "ponto_corredor_19",
+        "distancia_m": 12.7,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.064054,
+            -15.607904
+          ],
+          [
+            -56.063958,
+            -15.607837
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_33",
+        "origem": "ponto_corredor_19",
+        "destino": "ponto_corredor_22",
+        "distancia_m": 51.8,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.063958,
+            -15.607837
+          ],
+          [
+            -56.063647,
+            -15.608194
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "aresta_faet_t_34",
+        "origem": "ponto_corredor_19",
+        "destino": "ponto_corredor_17",
+        "distancia_m": 42.6,
+        "acessivel": true,
+        "andar": 0,
+        "tipo": "corredor",
+        "bloco": "faet",
+        "ativo": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -56.063958,
+            -15.607837
+          ],
+          [
+            -56.064129,
+            -15.607628
+          ],
+          [
+            -56.064221,
+            -15.607705
+          ]
+        ]
+      }
+    }
+  ]
+}
