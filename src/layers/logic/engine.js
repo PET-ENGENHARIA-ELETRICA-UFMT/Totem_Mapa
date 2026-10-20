@@ -85,7 +85,7 @@ export class RouteEngine {
     if (!this.dijkstraEngine) return [];
 
     const accessibilityMode = Boolean(options.accessibilityMode);
-    const maxAlternatives = options.maxAlternatives ?? 3;
+    const maxAlternatives = options.maxAlternatives ?? 2;
 
     const startNode = this.nodes.get(startNodeId);
     const endNode = this.nodes.get(endNodeId);
@@ -105,10 +105,12 @@ export class RouteEngine {
       return [];
     }
 
+    const cappedRoutes = rawRoutes.slice(0, 1 + maxAlternatives);
+
     const startName = startNode.nome || 'Origem';
     const endName = endNode.nome || 'Destino';
 
-    return rawRoutes.map((route, index) => {
+    return cappedRoutes.map((route, index) => {
       const coordinates = route.path.map((node) => [node.lng, node.lat]);
       const floorsCovered = Array.from(new Set(route.path.map((node) => String(node.andar))));
       const instructions = generateTurnByTurnInstructions(route.path, startName, endName);

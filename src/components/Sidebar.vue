@@ -53,6 +53,242 @@ function handlePartirDaqui() {
   }
 }
 
+// ---- Aba Rotas: busca digitável de origem/destino ----
+const originText = ref('');
+const destText = ref('');
+const originOpen = ref(false);
+const destOpen = ref(false);
+const originHighlightIdx = ref(0);
+const destHighlightIdx = ref(0);
+
+const isSelectedDisabled = computed(() => {
+  const p = store.selectedRoomFeature?.properties;
+  return p?.ativo === false || String(p?.ativo).toLowerCase() === 'false';
+});
+
+function nodeLabel(node) {
+  return `${node.nome} (${String(node.andar) === '0' ? 'Térreo' : `${node.andar}º Andar`})`;
+}
+
+function normalizeStr(str) {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function getNodeIconClass(tipo) {
+  const t = (tipo || '').toLowerCase();
+  if (t.includes('sala')) return 'fa-solid fa-door-open';
+  if (t.includes('laborat') || t.includes('lab')) return 'fa-solid fa-flask';
+  if (t.includes('banheiro')) return 'fa-solid fa-restroom';
+  if (t.includes('elevador')) return 'fa-solid fa-elevator';
+  if (t.includes('escada')) return 'fa-solid fa-stairs';
+  if (t.includes('rampa')) return 'fa-solid fa-wheelchair';
+  if (t.includes('biblioteca')) return 'fa-solid fa-book';
+  if (t.includes('secretaria')) return 'fa-solid fa-briefcase';
+  if (t.includes('auditorio')) return 'fa-solid fa-users';
+  return 'fa-solid fa-location-dot';
+}
+
+function searchRoutableNodes(query, selectedNodeId = null) {
+  const allNodes = store.routableNodes;
+  if (!allNodes || allNodes.length === 0) return [];
+
+  const selectedNode = allNodes.find((n) => n.id === selectedNodeId);
+  const selectedLabel = selectedNode ? nodeLabel(selectedNode) : '';
+
+  // Se o texto digitado for exatamente a etiqueta do nó selecionado, exibe a lista geral inteligente
+  const isExactSelected = query && selectedLabel && query.trim().toLowerCase() === selectedLabel.trim().toLowerCase();
+  const q = isExactSelected ? '' : normalizeStr(query);
+
+  if (!q) {
+    return [...allNodes].sort((a, b) => {
+      const aCurrent = String(a.andar) === String(store.currentFloor);
+      const bCurrent = String(b.andar) === String(store.currentFloor);
+      if (aCurrent && !bCurrent) return -1;
+      if (!aCurrent && bCurrent) return 1;
+      return (a.nome || '').localeCompare(b.nome || '');
+    }).slice(0, 30);
+  }
+
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const scored = [];
+  for (const node of allNodes) {
+    const nomeNorm = normalizeStr(node.nome);
+    const tipoNorm = normalizeStr(node.tipo);
+    const blocoNorm = normalizeStr(node.bloco);
+    const andarStr = String(node.andar) === '0' ? 'terreo 0' : `${node.andar} andar ${node.andar}o`;
+    const fullText = `${nomeNorm} ${tipoNorm} ${blocoNorm} ${andarStr}`;
+
+    const allMatch = tokens.every((tok) => fullText.includes(tok));
+    if (!allMatch) continue;
+
+    let score = 0;
+    if (nomeNorm === q) score += 1000;
+    else if (nomeNorm.startsWith(q)) score += 500;
+    else if (nomeNorm.includes(q)) score += 250;
+
+    tokens.forEach((tok) => {
+      if (nomeNorm.startsWith(tok)) score += 100;
+      else if (nomeNorm.includes(tok)) score += 50;
+    });
+
+    if (String(node.andar) === String(store.currentFloor)) score += 40;
+    if (node.isDisabled) score -= 300;
+
+    scored.push({ node, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score || (a.node.nome || '').localeCompare(b.node.nome || ''));
+  return scored.slice(0, 30).map((s) => s.node);
+}
+
+const originSuggestions = computed(() => searchRoutableNodes(originText.value, store.originNodeId));
+const destSuggestions = computed(() => searchRoutableNodes(destText.value, store.destinationNodeId));
+
+function pickOrigin(node) {
+  store.originNodeId = node.id;
+  originText.value = nodeLabel(node);
+  originOpen.value = false;
+  if (store.destinationNodeId) store.calculateRoute();
+}
+
+function pickDestination(node) {
+  store.destinationNodeId = node.id;
+  destText.value = nodeLabel(node);
+  destOpen.value = false;
+  if (store.originNodeId) store.calculateRoute();
+}
+
+function handleOriginFocus(e) {
+  originOpen.value = true;
+  originHighlightIdx.value = 0;
+  e?.target?.select?.();
+}
+
+function handleDestFocus(e) {
+  destOpen.value = true;
+  destHighlightIdx.value = 0;
+  e?.target?.select?.();
+}
+
+function clearOrigin() {
+  store.originNodeId = '';
+  originText.value = '';
+  originOpen.value = true;
+  originHighlightIdx.value = 0;
+  if (store.hasRoute) store.clearRoute();
+  document.getElementById('select-origin')?.focus();
+}
+
+function clearDest() {
+  store.destinationNodeId = '';
+  destText.value = '';
+  destOpen.value = true;
+  destHighlightIdx.value = 0;
+  if (store.hasRoute) store.clearRoute();
+  document.getElementById('select-destination')?.focus();
+}
+
+function clearSearchInput() {
+  searchInput.value = '';
+  store.searchQuery = '';
+  isSuggestionsOpen.value = false;
+  document.getElementById('sala-input')?.focus();
+}
+
+function onOriginKeydown(e) {
+  if (!originOpen.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    originOpen.value = true;
+    return;
+  }
+  const list = originSuggestions.value;
+  if (!list.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    originHighlightIdx.value = (originHighlightIdx.value + 1) % list.length;
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    originHighlightIdx.value = (originHighlightIdx.value - 1 + list.length) % list.length;
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const picked = list[originHighlightIdx.value] || list[0];
+    if (picked) pickOrigin(picked);
+  } else if (e.key === 'Escape') {
+    originOpen.value = false;
+  }
+}
+
+function onDestKeydown(e) {
+  if (!destOpen.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    destOpen.value = true;
+    return;
+  }
+  const list = destSuggestions.value;
+  if (!list.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    destHighlightIdx.value = (destHighlightIdx.value + 1) % list.length;
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    destHighlightIdx.value = (destHighlightIdx.value - 1 + list.length) % list.length;
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const picked = list[destHighlightIdx.value] || list[0];
+    if (picked) pickDestination(picked);
+  } else if (e.key === 'Escape') {
+    destOpen.value = false;
+  }
+}
+
+function closeLater(which) {
+  setTimeout(() => {
+    if (which === 'origin') originOpen.value = false;
+    else destOpen.value = false;
+  }, 180);
+}
+
+// Mantém os textos sincronizados com a seleção feita fora da aba (ex.: "Partir Daqui")
+watch(
+  () => [store.originNodeId, store.destinationNodeId, store.routableNodes.length],
+  () => {
+    const o = store.routableNodes.find((n) => n.id === store.originNodeId);
+    const d = store.routableNodes.find((n) => n.id === store.destinationNodeId);
+    originText.value = o ? nodeLabel(o) : '';
+    destText.value = d ? nodeLabel(d) : '';
+  },
+  { immediate: true }
+);
+
+const destinationName = computed(() => {
+  const d = store.routableNodes.find((n) => n.id === store.destinationNodeId);
+  return d?.nome || '';
+});
+
+const routeButtonLabel = computed(() => {
+  if (!store.originNodeId) return 'Selecionar início de rota';
+  return destinationName.value
+    ? `Traçar rota até ${destinationName.value}`
+    : 'Traçar rota até o destino';
+});
+
+function handleRouteAction() {
+  if (!store.originNodeId) {
+    document.getElementById('select-origin')?.focus();
+    return;
+  }
+  if (!store.destinationNodeId) {
+    document.getElementById('select-destination')?.focus();
+    return;
+  }
+  store.calculateRoute();
+}
+
 const categoryTitle = computed(() => {
   const titles = {
     sala: 'Salas',
@@ -82,7 +318,7 @@ function getCategoryIconClass(category) {
   <aside
     id="sidebar"
     :class="[
-      'absolute top-4 left-4 bottom-4 z-[1000] w-96 flex flex-col pointer-events-none transition-all duration-300',
+      'absolute top-2 sm:top-3 md:top-4 left-2 sm:left-3 md:left-4 bottom-2 sm:bottom-3 md:bottom-4 z-[1000] w-[calc(100vw-1.5rem)] max-w-[340px] md:max-w-none md:w-96 flex flex-col pointer-events-none transition-all duration-300',
       { collapsed: store.isSidebarCollapsed }
     ]"
   >
@@ -169,24 +405,46 @@ function getCategoryIconClass(category) {
               @input="onSearchInput($event.target.value)"
               @focus="isSuggestionsOpen = searchInput.trim().length > 0"
               placeholder="Pesquisar local ou sala..."
-              class="w-full bg-slate-100 dark:bg-[#111622] border border-transparent dark:border-slate-800 rounded-2xl px-5 py-3 pl-12 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white dark:focus:bg-[#1a1f2e] transition-all text-slate-700 dark:text-slate-200 font-semibold placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              class="w-full bg-slate-100 dark:bg-[#111622] border border-transparent dark:border-slate-800 rounded-2xl px-5 py-3 pl-12 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:bg-white dark:focus:bg-[#1a1f2e] transition-all text-slate-700 dark:text-slate-200 font-semibold placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             <i
               class="fa-solid fa-magnifying-glass absolute left-4 top-4 text-slate-400 dark:text-slate-500"
             ></i>
+            <button
+              v-if="searchInput"
+              type="button"
+              @click="clearSearchInput"
+              class="absolute right-3.5 top-3.5 w-6 h-6 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center text-xs transition-colors"
+              title="Limpar pesquisa"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
 
             <!-- Suggestions Container -->
             <div
               v-show="isSuggestionsOpen && store.filteredSalas.length > 0"
-              class="absolute top-[110%] left-0 right-0 bg-white dark:bg-[#1a1f2e] shadow-2xl rounded-2xl overflow-hidden z-[1050] border border-slate-100 dark:border-slate-800 max-h-60 overflow-y-auto transition-all"
+              class="absolute top-[110%] left-0 right-0 bg-white dark:bg-[#1a1f2e] shadow-2xl rounded-2xl overflow-hidden z-[1050] border border-slate-100 dark:border-slate-800 max-h-64 overflow-y-auto transition-all"
             >
               <div
                 v-for="room in store.filteredSalas"
                 :key="room.properties?.nome"
                 @click="handleSelectSuggestion(room)"
-                class="suggestion-item"
+                class="suggestion-item flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-[#252c3e] border-b border-slate-100 dark:border-slate-800/80 last:border-b-0"
               >
-                {{ room.properties?.nome }}
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs shrink-0">
+                    <i :class="getNodeIconClass(room.properties?.tipo)"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 block truncate leading-tight">
+                      {{ room.properties?.nome }}
+                    </span>
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mt-0.5 block truncate">
+                      {{ (room.properties?.bloco || 'FAET').toUpperCase() }} • {{ room.properties?.andar === '0' || room.properties?.andar === 0 ? 'Térreo' : `${room.properties?.andar}º Andar` }}
+                    </span>
+                  </div>
+                </div>
+                <i class="fa-solid fa-chevron-right text-[10px] text-slate-300 dark:text-slate-600 pr-1"></i>
               </div>
             </div>
           </div>
@@ -405,6 +663,12 @@ function getCategoryIconClass(category) {
                   >
                     {{ store.selectedRoomFeature.properties?.acessivel || store.selectedRoomFeature.properties?.acessibilidade === 'true' ? 'Rota Acessível' : 'Escadas Apenas' }}
                   </span>
+                  <span
+                    v-if="isSelectedDisabled"
+                    class="px-2 py-0.5 text-[10px] font-extrabold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-md border border-red-200 dark:border-red-900/40"
+                  >
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>Desativado
+                  </span>
                 </div>
               </div>
               <div class="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
@@ -444,61 +708,165 @@ function getCategoryIconClass(category) {
               class="absolute left-[1.6rem] top-10 bottom-10 w-[2px] border-l-2 border-dashed border-slate-200 dark:border-slate-800 z-0"
             ></div>
 
+            <!-- Ponto de Partida -->
             <div class="relative z-10 flex items-center gap-3">
               <div
-                class="w-4 h-4 rounded-full border-[4px] border-blue-500 bg-white dark:bg-[#1a1f2e] shadow-sm ml-2.5"
+                class="w-4 h-4 rounded-full border-[4px] border-blue-500 bg-white dark:bg-[#1a1f2e] shadow-sm ml-2.5 shrink-0"
               ></div>
-              <div class="flex-1">
+              <div class="flex-1 min-w-0 pr-2">
                 <span
                   class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block"
                 >
                   Ponto de Partida
                 </span>
-                <select
-                  id="select-origin"
-                  v-model="store.originNodeId"
-                  @change="store.calculateRoute()"
-                  class="w-full bg-transparent border-none py-1 text-sm font-extrabold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
-                >
-                  <option value="" class="dark:bg-[#1e293b]">Escolher o ponto de partida...</option>
-                  <option
-                    v-for="node in store.routableNodes"
-                    :key="'orig_' + node.id"
-                    :value="node.id"
-                    class="dark:bg-[#1e293b]"
+                <div class="relative flex items-center">
+                  <input
+                    id="select-origin"
+                    type="text"
+                    v-model="originText"
+                    @input="originOpen = true; originHighlightIdx = 0"
+                    @focus="handleOriginFocus($event)"
+                    @blur="closeLater('origin')"
+                    @keydown="onOriginKeydown"
+                    placeholder="Digite o ponto de partida..."
+                    autocomplete="off"
+                    class="w-full bg-transparent border-none py-1 pr-6 text-sm font-extrabold text-slate-700 dark:text-slate-200 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                  />
+                  <button
+                    v-if="originText"
+                    type="button"
+                    @mousedown.prevent="clearOrigin"
+                    class="w-5 h-5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center text-xs transition-colors shrink-0"
+                    title="Limpar partida"
                   >
-                    {{ node.nome }} ({{ node.andar === '0' ? 'Térreo' : `${node.andar}º Andar` }})
-                  </option>
-                </select>
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+
+                  <div
+                    v-show="originOpen && originSuggestions.length > 0"
+                    class="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-[#1a1f2e] shadow-2xl rounded-2xl overflow-hidden z-[1050] border border-slate-100 dark:border-slate-800 max-h-60 overflow-y-auto"
+                  >
+                    <div
+                      v-for="(node, idx) in originSuggestions"
+                      :key="'orig_' + node.id"
+                      @mousedown.prevent="pickOrigin(node)"
+                      :class="[
+                        'suggestion-item flex items-center justify-between p-3 cursor-pointer transition-all border-b border-slate-100 dark:border-slate-800/80 last:border-b-0',
+                        originHighlightIdx === idx
+                          ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                          : 'hover:bg-slate-50 dark:hover:bg-[#252c3e]'
+                      ]"
+                    >
+                      <div class="flex items-center gap-3 min-w-0">
+                        <div
+                          :class="[
+                            'w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-xs',
+                            node.isDisabled
+                              ? 'bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                          ]"
+                        >
+                          <i :class="getNodeIconClass(node.tipo)"></i>
+                        </div>
+                        <div class="min-w-0">
+                          <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 block truncate leading-tight">
+                            {{ node.nome }}
+                          </span>
+                          <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mt-0.5 block truncate">
+                            {{ (node.bloco || 'FAET').toUpperCase() }} • {{ String(node.andar) === '0' ? 'Térreo' : `${node.andar}º Andar` }}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        v-if="node.isDisabled"
+                        class="ml-2 px-1.5 py-0.5 text-[9px] font-black bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 rounded border border-red-200 dark:border-red-900/40 shrink-0"
+                      >
+                        Desativado
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div class="w-full h-[1px] bg-slate-100 dark:bg-slate-800/80 my-2"></div>
 
+            <!-- Destino -->
             <div class="relative z-10 flex items-center gap-3">
-              <div class="w-4 h-4 rounded-full bg-rose-500 shadow-sm ml-2.5"></div>
-              <div class="flex-1">
+              <div class="w-4 h-4 rounded-full bg-rose-500 shadow-sm ml-2.5 shrink-0"></div>
+              <div class="flex-1 min-w-0 pr-2">
                 <span
                   class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block"
                 >
                   Destino
                 </span>
-                <select
-                  id="select-destination"
-                  v-model="store.destinationNodeId"
-                  @change="store.calculateRoute()"
-                  class="w-full bg-transparent border-none py-1 text-sm font-extrabold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
-                >
-                  <option value="" class="dark:bg-[#1e293b]">Ex: Secretaria, Biblioteca...</option>
-                  <option
-                    v-for="node in store.routableNodes"
-                    :key="'dest_' + node.id"
-                    :value="node.id"
-                    class="dark:bg-[#1e293b]"
+                <div class="relative flex items-center">
+                  <input
+                    id="select-destination"
+                    type="text"
+                    v-model="destText"
+                    @input="destOpen = true; destHighlightIdx = 0"
+                    @focus="handleDestFocus($event)"
+                    @blur="closeLater('dest')"
+                    @keydown="onDestKeydown"
+                    placeholder="Digite o destino: Secretaria, Biblioteca..."
+                    autocomplete="off"
+                    class="w-full bg-transparent border-none py-1 pr-6 text-sm font-extrabold text-slate-700 dark:text-slate-200 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                  />
+                  <button
+                    v-if="destText"
+                    type="button"
+                    @mousedown.prevent="clearDest"
+                    class="w-5 h-5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center text-xs transition-colors shrink-0"
+                    title="Limpar destino"
                   >
-                    {{ node.nome }} ({{ node.andar === '0' ? 'Térreo' : `${node.andar}º Andar` }})
-                  </option>
-                </select>
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+
+                  <div
+                    v-show="destOpen && destSuggestions.length > 0"
+                    class="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-[#1a1f2e] shadow-2xl rounded-2xl overflow-hidden z-[1050] border border-slate-100 dark:border-slate-800 max-h-60 overflow-y-auto"
+                  >
+                    <div
+                      v-for="(node, idx) in destSuggestions"
+                      :key="'dest_' + node.id"
+                      @mousedown.prevent="pickDestination(node)"
+                      :class="[
+                        'suggestion-item flex items-center justify-between p-3 cursor-pointer transition-all border-b border-slate-100 dark:border-slate-800/80 last:border-b-0',
+                        destHighlightIdx === idx
+                          ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                          : 'hover:bg-slate-50 dark:hover:bg-[#252c3e]'
+                      ]"
+                    >
+                      <div class="flex items-center gap-3 min-w-0">
+                        <div
+                          :class="[
+                            'w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-xs',
+                            node.isDisabled
+                              ? 'bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                          ]"
+                        >
+                          <i :class="getNodeIconClass(node.tipo)"></i>
+                        </div>
+                        <div class="min-w-0">
+                          <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 block truncate leading-tight">
+                            {{ node.nome }}
+                          </span>
+                          <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mt-0.5 block truncate">
+                            {{ (node.bloco || 'FAET').toUpperCase() }} • {{ String(node.andar) === '0' ? 'Térreo' : `${node.andar}º Andar` }}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        v-if="node.isDisabled"
+                        class="ml-2 px-1.5 py-0.5 text-[9px] font-black bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 rounded border border-red-200 dark:border-red-900/40 shrink-0"
+                      >
+                        Desativado
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -542,15 +910,15 @@ function getCategoryIconClass(category) {
             </div>
           </div>
 
-          <!-- Action Button: Calcular Rota -->
+          <!-- Action Button: Selecionar início / Traçar rota -->
           <button
             id="btn-calculate"
             type="button"
-            @click="store.calculateRoute()"
+            @click="handleRouteAction"
             class="w-full bg-[#82c91e] hover:bg-[#74b816] text-[#1a3300] font-black py-4 rounded-2xl transition-all shadow-lg shadow-[#82c91e]/20 flex items-center justify-center gap-2.5 text-sm uppercase tracking-wider active:scale-[0.98]"
           >
-            <i class="fa-solid fa-paper-plane"></i>
-            <span>Calcular rota</span>
+            <i :class="store.originNodeId ? 'fa-solid fa-route' : 'fa-solid fa-flag'"></i>
+            <span>{{ routeButtonLabel }}</span>
           </button>
 
           <!-- Action Button: Limpar Caminho -->
@@ -574,7 +942,7 @@ function getCategoryIconClass(category) {
             >
               Opções de Rota ({{ store.routes.length }})
             </span>
-            <div class="grid grid-cols-2 gap-2">
+            <div :class="['grid gap-2', store.routes.length === 3 ? 'grid-cols-3' : 'grid-cols-2']">
               <button
                 v-for="(r, idx) in store.routes"
                 :key="r.id"
@@ -686,12 +1054,12 @@ function getCategoryIconClass(category) {
       id="sidebar-toggle-btn"
       type="button"
       @click="store.toggleSidebar"
-      class="absolute left-full top-6 z-[1000] w-10 h-10 bg-white dark:bg-[#1a1f2e] shadow-lg rounded-r-xl border-y border-r border-slate-100 dark:border-slate-800/80 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all pointer-events-auto active:scale-95"
+      class="absolute left-full top-3 sm:top-4 md:top-6 z-[1000] w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-white dark:bg-[#1a1f2e] shadow-lg rounded-r-xl border-y border-r border-slate-100 dark:border-slate-800/80 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all pointer-events-auto active:scale-95"
     >
       <i
         id="sidebar-toggle-icon"
         :class="[
-          'fa-solid text-sm transition-transform duration-300',
+          'fa-solid text-xs sm:text-sm transition-transform duration-300',
           store.isSidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'
         ]"
       ></i>

@@ -8,7 +8,7 @@ export const TILE_PROVIDERS = {
   'carto-positron': {
     id: 'carto-positron',
     name: 'Carto Claro (Positron)',
-    tag: 'Padrão Recomendado',
+    tag: 'Minimalista',
     category: 'Claro',
     desc: 'Visual minimalista, limpo e de alto contraste, ideal para navegação interna.',
     url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
@@ -53,7 +53,7 @@ export const TILE_PROVIDERS = {
   'osm-standard': {
     id: 'osm-standard',
     name: 'OpenStreetMap',
-    tag: 'Vias & Ruas',
+    tag: 'Padrão Recomendado',
     category: 'Ruas',
     desc: 'Cartografia colaborativa com traçado detalhado de vias e quadras.',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -97,7 +97,7 @@ export const TILE_PROVIDERS = {
   }
 };
 
-export const DEFAULT_TILE_PROVIDER_ID = 'carto-positron';
+export const DEFAULT_TILE_PROVIDER_ID = 'osm-standard';
 
 export const ZOOM_LEVEL_OPTIONS = [
   { value: 21, label: '21x — Padrão', desc: 'Aproximação recomendada para visualização geral' },

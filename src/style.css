@@ -73,6 +73,37 @@ input,
 }
 
 /* ===================================================================
+   RESPONSIVIDADE: MOBILE PORTRAIT & LANDSCAPE
+   =================================================================== */
+
+/* Ocultação estrita do QR Code no Mobile (< 768px) */
+@media (max-width: 768px) {
+  #card-totem-info,
+  .qr-code-wrapper {
+    display: none !important;
+  }
+}
+
+/* Utilitário para ocultar scrollbars em elementos roláveis horizontais */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Otimizações de toque para botões em mobile */
+@media (max-width: 768px) {
+  .floor-btn,
+  #btn-zoom-in,
+  #btn-zoom-out,
+  #sidebar-toggle-btn {
+    touch-action: manipulation;
+  }
+}
+
+/* ===================================================================
    TABS E ACTIVE STATES
    =================================================================== */
 .tab-btn.active {
@@ -217,6 +248,29 @@ html.dark #map-container {
   transform: scale(0.97);
 }
 
+.custom-popup .popup-button-secondary {
+  background-color: #f1f5f9;
+  color: #334155;
+  box-shadow: none;
+  border: 1px solid #cbd5e1;
+}
+
+.custom-popup .popup-button-secondary:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+html.dark .custom-popup .popup-button-secondary {
+  background-color: #1e293b;
+  color: #cbd5e1;
+  border-color: #334155;
+}
+
+html.dark .custom-popup .popup-button-secondary:hover {
+  background-color: #334155;
+  color: #ffffff;
+}
+
 /* ===================================================================
    FLOOR SELECTOR AND MAP BUTTON CONTROLES
    =================================================================== */
@@ -300,6 +354,12 @@ html.dark .sala-label {
 
 .poi-marker-elevador {
   background: linear-gradient(135deg, #a855f7, #6b21a8);
+}
+
+.poi-marker.poi-marker-disabled {
+  background: linear-gradient(135deg, #ef4444, #991b1b);
+  border-color: #fecaca;
+  opacity: 0.95;
 }
 
 .poi-marker-rampa {
@@ -432,4 +492,116 @@ html.dark .sala-label {
 #map-container {
   touch-action: pinch-zoom;
 }
+
+/* ===================================================================
+   FASE 4: MOTOR VISUAL INDOOR (LEAFLET.JS)
+   =================================================================== */
+
+/* 1. POLÍGONOS DE SALAS */
+.geo-sala {
+  transition: fill-opacity 0.2s ease, stroke-width 0.2s ease;
+  outline: none;
+}
+
+.geo-sala:hover {
+  fill-opacity: 0.92 !important;
+  stroke-width: 3px !important;
+  cursor: pointer;
+}
+
+/* Hachura SVG para salas bloqueadas */
+.geo-sala-bloqueada {
+  fill: url(#diagonal-hatch-red) !important;
+  stroke: #dc2626 !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 6, 4;
+}
+
+/* 2. REDE DE CAMINHOS: Rota Ativa Dijkstra (Azul Neon Animado) */
+.leaflet-route-neon-active {
+  stroke: #00f0ff !important;
+  stroke-width: 5px !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.95))
+          drop-shadow(0 0 16px rgba(0, 240, 255, 0.5));
+  animation: dijkstraFlowAnimation 1.2s linear infinite;
+  will-change: stroke-dashoffset;
+}
+
+@keyframes dijkstraFlowAnimation {
+  from {
+    stroke-dashoffset: 26;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 3. PONTOS DE INTERESSE: DivIcon Customizados */
+.poi-custom-container {
+  background: transparent !important;
+  border: none !important;
+}
+
+.poi-div-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+}
+
+.poi-div-icon:hover {
+  transform: scale(1.22);
+  z-index: 9999 !important;
+}
+
+.poi-icon-wrapper {
+  color: #ffffff;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Elevador: Azul */
+.poi-elevador {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 0 10px rgba(29, 78, 216, 0.5);
+}
+
+/* Escada: Laranja */
+.poi-escada {
+  background: linear-gradient(135deg, #fb923c, #ea580c);
+  box-shadow: 0 0 10px rgba(234, 88, 12, 0.5);
+}
+
+/* Bloqueio: Alerta Vermelho com Pulsação */
+.poi-bloqueio {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.7);
+  animation: pulseAlert 1.6s infinite ease-in-out;
+}
+
+@keyframes pulseAlert {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(220, 38, 38, 0.6);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 16px rgba(220, 38, 38, 0.95);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(220, 38, 38, 0.6);
+  }
+}
+
 

@@ -540,6 +540,9 @@ export class GraphBuilder {
             acessivel: true,
             isPoi: true,
             isElevator: tipo === 'elevador',
+            isDisabled:
+              feature?.properties?.ativo === false ||
+              String(feature?.properties?.ativo).toLowerCase() === 'false',
             nearestNodeId: projId,
             feature
           });
@@ -756,6 +759,7 @@ export class GraphBuilder {
             nearestNodeId: node.nearestNodeId,
             isPoi: true,
             isElevator: Boolean(node.isElevator || node.tipo === 'elevador'),
+            isDisabled: Boolean(node.isDisabled),
             feature: node.feature
           });
         }

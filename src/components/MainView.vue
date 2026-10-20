@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useMainStore } from '../stores/mainStore.js';
 import { MAP_CONFIG, abbreviateName, getMapCenter } from '../layers/logic/utils.js';
 import { TILE_PROVIDERS } from '../layers/data/tileProviders.js';
+import { getSalaStyle, createPoiMarker, ROUTE_STYLES } from '../layers/logic/indoorStyleEngine.js';
 
 const store = useMainStore();
 
@@ -24,8 +25,14 @@ const mapLayers = {
   userMarker: null
 };
 
+// Elevador (ou POI) marcado como desativado no GeoJSON (ativo: false)
+function isFeatureDisabled(feature) {
+  const v = feature?.properties?.ativo;
+  return v === false || String(v).toLowerCase() === 'false';
+}
+
 // Ícones Customizados Leaflet
-function getPoiIcon(tipo) {
+function getPoiIcon(tipo, disabled = false) {
   const t = (tipo || '').toLowerCase();
   const iconMap = {
     banheiro: { html: '🚻', className: 'poi-marker poi-marker-banheiro', size: [28, 28] },
@@ -37,7 +44,7 @@ function getPoiIcon(tipo) {
 
   const item = iconMap[t] || { html: '📍', className: 'poi-marker', size: [28, 28] };
   return L.divIcon({
-    className: item.className,
+    className: disabled ? `${item.className} poi-marker-disabled` : item.className,
     html: item.html,
     iconSize: item.size,
     iconAnchor: [item.size[0] / 2, item.size[1]],
@@ -202,12 +209,10 @@ function drawSalas() {
     {
       style: (feature) => {
         const isSelected = feature.properties?.nome === currentSelectedName;
+        const baseStyle = getSalaStyle(feature, isSelected);
         return {
-          fillColor: isSelected ? MAP_CONFIG.colors.selected : '#e2e8f0',
-          color: isSelected ? '#1d4ed8' : '#64748b',
-          weight: isSelected ? 2.5 : 1,
-          fillOpacity: isSelected ? 0.65 : 0.35,
-          className: 'sala-polygon-interactive'
+          ...baseStyle,
+          className: `${baseStyle.className || 'geo-sala'} sala-polygon-interactive`
         };
       },
       onEachFeature: (feature, layer) => {
@@ -224,10 +229,21 @@ function drawSalas() {
             .openOn(map);
 
           setTimeout(() => {
-            const btnNav = document.getElementById(`popup-btn-nav-${props.nome}`);
-            if (btnNav) {
-              btnNav.onclick = () => {
-                store.setAsDestination(props.nome);
+            const btnMain = document.getElementById('popup-btn-main-action');
+            if (btnMain) {
+              btnMain.onclick = () => {
+                if (store.originNodeId) {
+                  store.setAsDestination(props.nome);
+                } else {
+                  store.setAsOrigin(props.nome);
+                }
+                map.closePopup();
+              };
+            }
+            const btnSec = document.getElementById('popup-btn-secondary-action');
+            if (btnSec) {
+              btnSec.onclick = () => {
+                store.setAsOrigin(props.nome);
                 map.closePopup();
               };
             }
@@ -241,6 +257,8 @@ function drawSalas() {
 function createPopupContent(props) {
   const andarText = props.andar === 0 || props.andar === '0' ? 'Térreo' : `${props.andar}º Andar`;
   const sanitizedName = props.nome || 'Local';
+  const hasOrigin = Boolean(store.originNodeId);
+
   return `
     <div class="custom-popup">
       <img src="${props.imagem || 'https://placehold.co/400x200/eeeeee/cccccc?text=Sem+Imagem'}" 
@@ -254,9 +272,16 @@ function createPopupContent(props) {
           <b>Andar:</b> ${andarText}<br>
           <b>Tipo:</b> ${props.tipo || 'Sala'}
         </div>
-        <button id="popup-btn-nav-${sanitizedName}" class="popup-button">
-          Traçar Rota até aqui
-        </button>
+        <div class="popup-actions" style="display: flex; flex-direction: column; gap: 8px;">
+          <button id="popup-btn-main-action" class="popup-button">
+            ${hasOrigin ? 'Definir Chegada' : 'Definir Partida'}
+          </button>
+          ${hasOrigin ? `
+            <button id="popup-btn-secondary-action" class="popup-button popup-button-secondary">
+              Definir Partida
+            </button>
+          ` : ''}
+        </div>
       </div>
     </div>
   `;
@@ -282,11 +307,15 @@ function drawPontos() {
     { ...store.geoData.pontos, features },
     {
       pointToLayer: (feature, latlng) => {
-        const icon = getPoiIcon(feature.properties?.tipo);
-        return L.marker(latlng, { icon, draggable: false });
+        return createPoiMarker(feature, latlng);
       },
       onEachFeature: (feature, layer) => {
-        if (feature.properties?.nome) {
+        if (isFeatureDisabled(feature)) {
+          layer.bindPopup(
+            `<b>${feature.properties?.nome || 'Elevador'}</b><br>` +
+              `<span style="color:#dc2626;font-weight:800">⚠️ Desativado — este elevador não está funcionando no momento.</span>`
+          );
+        } else if (feature.properties?.nome) {
           layer.bindPopup(`<b>${feature.properties.nome}</b>`);
         }
       }
@@ -399,14 +428,10 @@ function drawNavigationRoute() {
     mapLayers.alternativeRoutes.addTo(map);
   }
 
-  // 2. Traçado da rota no andar correspondente
+  // 2. Traçado da rota no andar correspondente (Azul Neon animado)
   if (floorNodes.length >= 2) {
     const floorCoords = floorNodes.map((n) => [n.lat, n.lng]);
-    mapLayers.activeRoute = L.polyline(floorCoords, {
-      color: MAP_CONFIG.colors.route.active,
-      weight: 6,
-      opacity: 0.95
-    }).addTo(map);
+    mapLayers.activeRoute = L.polyline(floorCoords, ROUTE_STYLES.activeDijkstraRoute).addTo(map);
   }
 
   // 3. Marcador de Ponto de Partida
@@ -633,6 +658,21 @@ onUnmounted(() => {
 
 <template>
   <main class="w-full h-screen absolute inset-0 z-0">
+    <!-- Definição da Hachura SVG para salas bloqueadas -->
+    <svg width="0" height="0" class="absolute pointer-events-none">
+      <defs>
+        <pattern
+          id="diagonal-hatch-red"
+          width="8"
+          height="8"
+          patternTransform="rotate(45 0 0)"
+          patternUnits="userSpaceOnUse"
+        >
+          <line x1="0" y1="0" x2="0" y2="8" stroke="#DC2626" stroke-width="2.5" />
+        </pattern>
+      </defs>
+    </svg>
+
     <!-- Container do Mapa Leaflet -->
     <div
       id="map-container"
@@ -677,7 +717,7 @@ onUnmounted(() => {
 
     <!-- CONTROLES DO MAPA (centro direita: Zoom e Seletor de Andares) -->
     <div
-      class="absolute right-4 top-1/2 -translate-y-1/2 z-[1000] flex flex-col items-center gap-1 bg-[#1a1f2e]/90 dark:bg-[#0d1117]/95 text-white backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-2xl pointer-events-auto transition-all"
+      class="absolute right-2.5 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 z-[1000] flex flex-col items-center gap-0.5 sm:gap-1 bg-[#1a1f2e]/90 dark:bg-[#0d1117]/95 text-white backdrop-blur-md p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-white/10 shadow-2xl pointer-events-auto transition-all"
     >
       <!-- Zoom In -->
       <button
@@ -685,7 +725,7 @@ onUnmounted(() => {
         type="button"
         title="Aumentar Zoom"
         @click="zoomIn"
-        class="w-10 h-10 rounded-xl hover:bg-white/10 flex items-center justify-center text-base font-black transition-all active:scale-90"
+        class="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl hover:bg-white/10 flex items-center justify-center text-xs sm:text-sm md:text-base font-black transition-all active:scale-90"
       >
         <i class="fa-solid fa-plus"></i>
       </button>
@@ -693,13 +733,13 @@ onUnmounted(() => {
       <!-- Zoom Level Indicator -->
       <div
         id="zoom-indicator-badge"
-        class="text-[9px] font-black tracking-tighter text-slate-300 select-none py-0.5 text-center"
+        class="text-[8px] sm:text-[9px] font-black tracking-tighter text-slate-300 select-none py-0.5 text-center"
         title="Nível de Zoom Atual"
       >
         {{ currentZoom }}x
       </div>
 
-      <div class="w-8 h-[1px] bg-white/10 my-0.5"></div>
+      <div class="w-6 sm:w-8 h-[1px] bg-white/10 my-0.5"></div>
 
       <!-- Floor Selector Stack -->
       <button
@@ -707,7 +747,7 @@ onUnmounted(() => {
         type="button"
         @click="store.setFloor('2')"
         :class="[
-          'floor-btn w-10 h-10 rounded-xl font-black flex items-center justify-center text-xs transition-all active:scale-90',
+          'floor-btn w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl font-black flex items-center justify-center text-[10px] sm:text-xs transition-all active:scale-90',
           store.currentFloor === '2'
             ? 'bg-blue-600 shadow-lg shadow-blue-600/30 text-white active-floor'
             : 'hover:bg-white/10'
@@ -721,7 +761,7 @@ onUnmounted(() => {
         type="button"
         @click="store.setFloor('1')"
         :class="[
-          'floor-btn w-10 h-10 rounded-xl font-black flex items-center justify-center text-xs transition-all active:scale-90',
+          'floor-btn w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl font-black flex items-center justify-center text-[10px] sm:text-xs transition-all active:scale-90',
           store.currentFloor === '1'
             ? 'bg-blue-600 shadow-lg shadow-blue-600/30 text-white active-floor'
             : 'hover:bg-white/10'
@@ -735,7 +775,7 @@ onUnmounted(() => {
         type="button"
         @click="store.setFloor('0')"
         :class="[
-          'floor-btn w-10 h-10 rounded-xl font-black flex items-center justify-center text-xs transition-all active:scale-90',
+          'floor-btn w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl font-black flex items-center justify-center text-[10px] sm:text-xs transition-all active:scale-90',
           store.currentFloor === '0'
             ? 'bg-blue-600 shadow-lg shadow-blue-600/30 text-white active-floor'
             : 'hover:bg-white/10'
@@ -744,7 +784,7 @@ onUnmounted(() => {
         T
       </button>
 
-      <div class="w-8 h-[1px] bg-white/10 my-0.5"></div>
+      <div class="w-6 sm:w-8 h-[1px] bg-white/10 my-0.5"></div>
 
       <!-- Zoom Out -->
       <button
@@ -752,20 +792,23 @@ onUnmounted(() => {
         type="button"
         title="Diminuir Zoom"
         @click="zoomOut"
-        class="w-10 h-10 rounded-xl hover:bg-white/10 flex items-center justify-center text-base font-black transition-all active:scale-90"
+        class="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl hover:bg-white/10 flex items-center justify-center text-xs sm:text-sm md:text-base font-black transition-all active:scale-90"
       >
         <i class="fa-solid fa-minus"></i>
       </button>
     </div>
 
-    <!-- CARD DO RODAPÉ ESQUERDO (informações do projeto) -->
-    <div class="absolute bottom-6 left-6 z-[1000] pointer-events-auto">
+    <!-- CARD DO RODAPÉ ESQUERDO: Preservado rigorosamente no Desktop, Oculto no Mobile -->
+    <div
+      id="card-totem-info"
+      class="hidden md:block absolute bottom-6 left-6 z-[1000] pointer-events-auto"
+    >
       <div
         class="bg-white/95 dark:bg-[#1a1f2e]/95 backdrop-blur-xl shadow-2xl rounded-3xl p-4 border border-white/60 dark:border-white/10 flex items-center gap-4 hover:-translate-y-1 transition-all duration-300"
       >
-        <!-- QR Code Container -->
+        <!-- QR Code Container: oculto em telas menores -->
         <div
-          class="w-16 h-16 bg-white rounded-2xl p-1.5 shadow-md flex items-center justify-center border border-slate-100 dark:border-slate-800 flex-shrink-0"
+          class="hidden md:flex qr-code-wrapper w-16 h-16 bg-white rounded-2xl p-1.5 shadow-md items-center justify-center border border-slate-100 dark:border-slate-800 flex-shrink-0"
         >
           <img
             src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/PET-Eletrica-UFMT/"
@@ -792,79 +835,79 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- BARRA DE NAVEGAÇÃO EM TEMPO REAL (rodapé centro) -->
+    <!-- BARRA DE NAVEGAÇÃO EM TEMPO REAL: Adaptada para portrait e landscape -->
     <div
       v-if="store.navigation.isActive && store.currentInstruction"
       id="navigation-bar"
-      class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-2xl px-4 pointer-events-auto"
+      class="absolute bottom-16 sm:bottom-18 md:bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-[calc(100vw-1.5rem)] sm:max-w-xl md:max-w-2xl px-2 sm:px-4 pointer-events-auto max-md:landscape:bottom-2 max-md:landscape:left-14 max-md:landscape:translate-x-0 max-md:landscape:max-w-[50vw]"
     >
       <div
-        class="bg-[#1a1f2e]/95 dark:bg-[#0d1117]/95 text-white backdrop-blur-xl shadow-2xl rounded-3xl p-4 border border-white/10 flex items-center justify-between gap-4 transition-all duration-300"
+        class="bg-[#1a1f2e]/95 dark:bg-[#0d1117]/95 text-white backdrop-blur-xl shadow-2xl rounded-2xl md:rounded-3xl p-2.5 sm:p-3 md:p-4 border border-white/10 flex items-center justify-between gap-2.5 md:gap-4 transition-all duration-300"
       >
         <!-- Left: Icon + Instruction -->
-        <div class="flex items-center gap-4 min-w-0">
+        <div class="flex items-center gap-2.5 md:gap-4 min-w-0">
           <div
-            class="bg-blue-600 text-white p-3 rounded-2xl shadow-md flex-shrink-0"
+            class="bg-blue-600 text-white p-2 sm:p-2.5 md:p-3 rounded-xl md:rounded-2xl shadow-md flex-shrink-0"
           >
-            <i class="fa-solid fa-person-walking text-lg"></i>
+            <i class="fa-solid fa-person-walking text-sm sm:text-base md:text-lg"></i>
           </div>
           <div class="min-w-0">
-            <h4 class="font-bold text-white leading-tight truncate text-sm">
+            <h4 class="font-bold text-white leading-tight truncate text-xs sm:text-sm">
               {{ store.currentInstruction.instruction }}
             </h4>
             <p
-              class="text-[10px] text-slate-400 font-extrabold uppercase mt-0.5 truncate tracking-wider"
+              class="text-[9px] sm:text-[10px] text-slate-400 font-extrabold uppercase mt-0.5 truncate tracking-wider"
             >
-              {{ store.navigation.originName }} → {{ store.navigation.destinationName }} — rota {{ store.isAccessible ? 'acessível' : 'padrão' }} ativada
+              {{ store.navigation.originName }} → {{ store.navigation.destinationName }} — {{ store.isAccessible ? 'acessível' : 'padrão' }}
             </p>
           </div>
         </div>
 
         <!-- Right: Distance / Time + Step Buttons -->
-        <div class="flex items-center gap-4 flex-shrink-0">
+        <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-shrink-0">
           <div class="text-right">
-            <span class="text-sm font-extrabold text-blue-400 block whitespace-nowrap">
+            <span class="text-xs sm:text-sm font-extrabold text-blue-400 block whitespace-nowrap">
               {{ store.remainingTime }} min
             </span>
-            <span class="text-xs font-semibold text-slate-400 block whitespace-nowrap">
+            <span class="text-[10px] sm:text-xs font-semibold text-slate-400 block whitespace-nowrap">
               {{ store.remainingDistance }} m
             </span>
           </div>
 
           <!-- Next / Prev controls for manual stepping -->
-          <div class="flex items-center gap-1 border-l border-white/10 pl-3">
+          <div class="flex items-center gap-0.5 sm:gap-1 border-l border-white/10 pl-2 sm:pl-3">
             <button
               type="button"
               title="Passo anterior"
               @click="store.stepNavigation(-1)"
-              class="w-8 h-8 rounded-full hover:bg-white/10 text-slate-400 flex items-center justify-center transition-colors"
+              class="w-7 h-7 sm:w-8 sm:h-8 rounded-full hover:bg-white/10 text-slate-400 flex items-center justify-center transition-colors"
             >
-              <i class="fa-solid fa-chevron-left text-xs"></i>
+              <i class="fa-solid fa-chevron-left text-[10px] sm:text-xs"></i>
             </button>
             <button
               type="button"
               title="Próximo passo"
               @click="store.stepNavigation(1)"
-              class="w-8 h-8 rounded-full hover:bg-white/10 text-slate-400 flex items-center justify-center transition-colors"
+              class="w-7 h-7 sm:w-8 sm:h-8 rounded-full hover:bg-white/10 text-slate-400 flex items-center justify-center transition-colors"
             >
-              <i class="fa-solid fa-chevron-right text-xs"></i>
+              <i class="fa-solid fa-chevron-right text-[10px] sm:text-xs"></i>
             </button>
             <button
               type="button"
               title="Encerrar navegação"
               @click="store.stopNavigation()"
-              class="w-8 h-8 rounded-full hover:bg-rose-950/40 text-rose-400 flex items-center justify-center transition-colors ml-1"
+              class="w-7 h-7 sm:w-8 sm:h-8 rounded-full hover:bg-rose-950/40 text-rose-400 flex items-center justify-center transition-colors ml-0.5 sm:ml-1"
             >
-              <i class="fa-solid fa-xmark text-sm"></i>
+              <i class="fa-solid fa-xmark text-xs sm:text-sm"></i>
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- CONTROLES DE VISUALIZAÇÃO (rodapé direita) -->
+    <!-- CONTROLES DE VISUALIZAÇÃO (rodapé direita): Condensados no mobile portrait/landscape -->
     <div
-      class="absolute bottom-6 right-6 z-[1000] flex items-center gap-3 pointer-events-auto"
+      class="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 md:bottom-6 md:right-6 z-[1000] flex items-center gap-1.5 sm:gap-2 md:gap-3 pointer-events-auto"
     >
       <!-- Dark Mode -->
       <button
@@ -872,11 +915,11 @@ onUnmounted(() => {
         type="button"
         title="Alternar Modo Escuro"
         @click="store.toggleDarkMode"
-        class="w-12 h-12 bg-white/95 dark:bg-[#1a1f2e]/95 text-slate-600 dark:text-white backdrop-blur-md rounded-full shadow-lg border border-slate-100 dark:border-white/10 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-[#252c3e] transition-all active:scale-95"
+        class="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white/95 dark:bg-[#1a1f2e]/95 text-slate-600 dark:text-white backdrop-blur-md rounded-full shadow-lg border border-slate-100 dark:border-white/10 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-[#252c3e] transition-all active:scale-95"
       >
         <i
           :class="[
-            'text-base',
+            'text-xs sm:text-sm md:text-base',
             store.isDarkMode ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon text-slate-600'
           ]"
         ></i>
@@ -888,11 +931,11 @@ onUnmounted(() => {
         type="button"
         title="Ocultar/Exibir Rótulos e Ícones"
         @click="store.toggleLayersVisibility"
-        class="w-12 h-12 bg-white/95 dark:bg-[#1a1f2e]/95 text-slate-600 dark:text-white backdrop-blur-md rounded-full shadow-lg border border-slate-100 dark:border-white/10 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-[#252c3e] transition-all active:scale-95"
+        class="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white/95 dark:bg-[#1a1f2e]/95 text-slate-600 dark:text-white backdrop-blur-md rounded-full shadow-lg border border-slate-100 dark:border-white/10 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-[#252c3e] transition-all active:scale-95"
       >
         <i
           :class="[
-            'text-base',
+            'text-xs sm:text-sm md:text-base',
             store.layersVisible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash text-slate-400'
           ]"
         ></i>
@@ -904,9 +947,9 @@ onUnmounted(() => {
         type="button"
         title="Centralizar na Localização"
         @click="locateUser"
-        class="w-12 h-12 bg-white/95 dark:bg-[#1a1f2e]/95 text-slate-600 dark:text-white backdrop-blur-md rounded-full shadow-lg border border-slate-100 dark:border-white/10 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-[#252c3e] transition-all active:scale-95"
+        class="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white/95 dark:bg-[#1a1f2e]/95 text-slate-600 dark:text-white backdrop-blur-md rounded-full shadow-lg border border-slate-100 dark:border-white/10 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-[#252c3e] transition-all active:scale-95"
       >
-        <i class="fa-solid fa-crosshairs text-base"></i>
+        <i class="fa-solid fa-crosshairs text-xs sm:text-sm md:text-base"></i>
       </button>
     </div>
   </main>

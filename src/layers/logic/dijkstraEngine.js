@@ -232,7 +232,7 @@ export class DijkstraEngine {
    */
   findAlternativeRoutes(startNodeId, endNodeId, options = {}) {
     const accessibilityMode = Boolean(options.accessibilityMode);
-    const maxAlternatives = options.maxAlternatives ?? 3;
+    const maxAlternatives = options.maxAlternatives ?? 2;
     const penaltyFactor = options.penaltyFactor ?? 2.5;
     const maxDistanceMultiplier = options.maxDistanceMultiplier ?? 3.8;
 
@@ -253,9 +253,9 @@ export class DijkstraEngine {
 
     const penalties = new Map();
 
-    // 2. Descoberta incremental de rotas alternativas
+    // 2. Descoberta incremental de rotas alternativas (no máximo maxAlternatives alternativas)
     const maxIterations = 12;
-    for (let iter = 0; iter < maxIterations && routes.length <= maxAlternatives; iter++) {
+    for (let iter = 0; iter < maxIterations && (routes.length - 1) < maxAlternatives; iter++) {
       // Penalizar arestas do caminho mais recente
       const lastRoute = routes[routes.length - 1];
       for (let i = 0; i < lastRoute.path.length - 1; i++) {

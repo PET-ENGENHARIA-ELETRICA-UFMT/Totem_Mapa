@@ -143,17 +143,21 @@ export const useMainStore = defineStore('main', {
      * Salas filtradas pela query do autocomplete
      */
     filteredSalas(state) {
-      const q = state.searchQuery.toLowerCase().trim();
+      const rawQ = state.searchQuery || '';
+      const normalize = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const q = normalize(rawQ);
       if (!q || !state.geoData.salas) return [];
 
+      const tokens = q.split(/\s+/).filter(Boolean);
+
       return state.geoData.salas.features
-        .filter(
-          (f) =>
-            f.properties &&
-            f.properties.nome &&
-            f.properties.nome.toLowerCase().includes(q)
-        )
-        .sort((a, b) => a.properties.nome.localeCompare(b.properties.nome));
+        .filter((f) => {
+          const p = f.properties;
+          if (!p || !p.nome) return false;
+          const target = normalize(`${p.nome} ${p.tipo || ''} ${p.bloco || ''} ${p.andar === 0 || p.andar === '0' ? 'terreo' : p.andar + ' andar'}`);
+          return tokens.every((tok) => target.includes(tok));
+        })
+        .sort((a, b) => (a.properties.nome || '').localeCompare(b.properties.nome || ''));
     },
 
     /**
@@ -264,6 +268,11 @@ export const useMainStore = defineStore('main', {
       this.isLoading = true;
       this.errorMessage = null;
       this.loadPersistedSettings();
+
+      // Em dispositivos móveis (< 768px), inicia a sidebar recolhida para dar visão total ao mapa
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        this.isSidebarCollapsed = true;
+      }
 
       try {
         const { salas, floor, pontos, corredores } = await dataLoader.loadAll();
@@ -527,10 +536,12 @@ export const useMainStore = defineStore('main', {
         // Localizar elevadores nos andares de origem e destino
         const originElevators = this.locations.filter(
           (l) => (l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador')) &&
+                 !l.isDisabled &&
                  String(l.andar) === originFloor
         );
         const destElevators = this.locations.filter(
           (l) => (l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador')) &&
+                 !l.isDisabled &&
                  String(l.andar) === destFloor
         );
 
@@ -564,7 +575,7 @@ export const useMainStore = defineStore('main', {
           targetElevatorOrigin.id,
           {
             accessibilityMode: this.isAccessible,
-            maxAlternatives: 3
+            maxAlternatives: 2
           }
         );
 
@@ -599,7 +610,7 @@ export const useMainStore = defineStore('main', {
         this.destinationNodeId,
         {
           accessibilityMode: this.isAccessible,
-          maxAlternatives: 3
+          maxAlternatives: 2
         }
       );
 
@@ -656,7 +667,7 @@ export const useMainStore = defineStore('main', {
           finalDest.id,
           {
             accessibilityMode: this.isAccessible,
-            maxAlternatives: 3
+            maxAlternatives: 2
           }
         );
 
@@ -684,6 +695,7 @@ export const useMainStore = defineStore('main', {
       const elevators = this.locations.filter(
         (l) =>
           (l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador')) &&
+          !l.isDisabled &&
           String(l.andar) === String(this.currentFloor)
       );
 
