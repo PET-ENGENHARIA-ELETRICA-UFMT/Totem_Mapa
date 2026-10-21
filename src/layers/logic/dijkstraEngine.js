@@ -232,7 +232,7 @@ export class DijkstraEngine {
    */
   findAlternativeRoutes(startNodeId, endNodeId, options = {}) {
     const accessibilityMode = Boolean(options.accessibilityMode);
-    const maxAlternatives = options.maxAlternatives ?? 2;
+    const maxAlternatives = options.maxAlternatives ?? 1;
     const penaltyFactor = options.penaltyFactor ?? 2.5;
     const maxDistanceMultiplier = options.maxDistanceMultiplier ?? 3.8;
 

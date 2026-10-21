@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar.vue';
 import MainView from './components/MainView.vue';
 import DetailsModal from './components/Modals/DetailsModal.vue';
 import SettingsModal from './components/Modals/SettingsModal.vue';
+import AdminModal from './components/Modals/AdminModal.vue';
 
 const store = useMainStore();
 
@@ -97,6 +98,9 @@ onMounted(() => {
 
     <!-- Modal de Configurações (Tyler do Mapa e Zoom) -->
     <SettingsModal />
+
+    <!-- Modal do Administrador (Gestão de Salas e Componentes) -->
+    <AdminModal />
 
     <!-- Notificações Toast Flutuantes -->
     <Transition

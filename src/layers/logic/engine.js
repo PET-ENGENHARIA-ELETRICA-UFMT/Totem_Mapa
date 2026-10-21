@@ -85,7 +85,7 @@ export class RouteEngine {
     if (!this.dijkstraEngine) return [];
 
     const accessibilityMode = Boolean(options.accessibilityMode);
-    const maxAlternatives = options.maxAlternatives ?? 2;
+    const maxAlternatives = options.maxAlternatives ?? 1;
 
     const startNode = this.nodes.get(startNodeId);
     const endNode = this.nodes.get(endNodeId);

@@ -12,7 +12,7 @@ function handleLayersClick() {
 }
 
 function handleProfileClick() {
-  store.showNotification('Perfil do Totem AcessoMap FAET/UFMT', 'info');
+  store.openAdminModal();
 }
 </script>
 
@@ -57,7 +57,7 @@ function handleProfileClick() {
       <button
         id="btn-action-settings"
         type="button"
-        title="Configurações"
+        title="Configurações do Mapa"
         @click="handleSettingsClick"
         class="w-8 h-8 sm:w-9 sm:h-9 md:w-12 md:h-12 bg-[#1a1f2e]/90 text-white backdrop-blur-md rounded-full shadow-lg border border-white/10 flex items-center justify-center hover:bg-[#252c3e] transition-all active:scale-95"
       >
@@ -67,7 +67,7 @@ function handleProfileClick() {
       <button
         id="btn-action-layers"
         type="button"
-        title="Camadas"
+        title="Visibilidade de Camadas"
         @click="handleLayersClick"
         class="w-8 h-8 sm:w-9 sm:h-9 md:w-12 md:h-12 bg-[#1a1f2e]/90 text-white backdrop-blur-md rounded-full shadow-lg border border-white/10 flex items-center justify-center hover:bg-[#252c3e] transition-all active:scale-95"
       >
@@ -77,11 +77,12 @@ function handleProfileClick() {
       <button
         id="btn-action-profile"
         type="button"
-        title="Perfil"
+        title="Painel do Administrador (Gestão de Salas e Componentes)"
         @click="handleProfileClick"
-        class="w-8 h-8 sm:w-9 sm:h-9 md:w-12 md:h-12 bg-[#1a1f2e]/90 text-white backdrop-blur-md rounded-full shadow-lg border border-white/10 flex items-center justify-center hover:bg-[#252c3e] transition-all active:scale-95"
+        class="w-8 h-8 sm:w-9 sm:h-9 md:w-12 md:h-12 bg-[#1a1f2e]/90 text-white backdrop-blur-md rounded-full shadow-lg border border-white/10 flex items-center justify-center hover:bg-[#252c3e] transition-all active:scale-95 group relative"
       >
-        <i class="fa-solid fa-circle-user text-xs sm:text-sm md:text-base"></i>
+        <i class="fa-solid fa-user-shield text-xs sm:text-sm md:text-base text-amber-400 group-hover:scale-110 transition-transform"></i>
+        <span class="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-[#1a1f2e]"></span>
       </button>
     </nav>
   </header>

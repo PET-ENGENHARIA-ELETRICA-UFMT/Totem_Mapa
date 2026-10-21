@@ -71,41 +71,154 @@ function getEndpointIcon(type) {
   });
 }
 
-function getElevatorTransitionIcon() {
+let layerControl = null;
+const baseLayerInstances = {};
+
+function getTransitionMarkerIcon(type = 'elevador') {
+  const isStair = type === 'escada';
   return L.divIcon({
-    className: 'elevator-transition-marker',
+    className: 'vertical-transition-marker',
     html: `
       <div class="relative flex items-center justify-center cursor-pointer">
-        <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-amber-400 opacity-60"></span>
-        <div style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5); border: 2.5px solid white;">
-          <i class="fa-solid fa-elevator"></i>
+        <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full ${isStair ? 'bg-orange-400' : 'bg-amber-400'} opacity-60"></span>
+        <div style="background: ${isStair ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'linear-gradient(135deg, #f59e0b, #d97706)'}; color: white; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5); border: 2.5px solid white;">
+          <i class="fa-solid ${isStair ? 'fa-stairs' : 'fa-elevator'}"></i>
         </div>
       </div>
     `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
   });
 }
 
-// Aplicação dinâmica de camada base de tiles ("tyler")
-function applyTileLayer(providerId) {
+// Configuração do Layer Control nativo do Leaflet (Mapbox API vs Padrão OSM vs Carto)
+function setupLayerControl() {
   if (!map) return;
-  const provider = TILE_PROVIDERS[providerId] || TILE_PROVIDERS['carto-positron'];
-
-  if (currentTileLayer && map.hasLayer(currentTileLayer)) {
-    map.removeLayer(currentTileLayer);
-    currentTileLayer = null;
+  if (layerControl) {
+    map.removeControl(layerControl);
+    layerControl = null;
   }
 
   const effectiveMaxZoom = store.maxZoomLevel || MAP_CONFIG.zoom.MAX;
 
-  currentTileLayer = L.tileLayer(provider.url, {
-    attribution: provider.attribution,
-    subdomains: provider.subdomains || 'abc',
-    maxNativeZoom: provider.maxNativeZoom || 19,
+  // 1. Provedor Padrão (OSM Standard)
+  const osmProvider = TILE_PROVIDERS['osm-standard'];
+  const osmLayer = L.tileLayer(osmProvider.url, {
+    attribution: osmProvider.attribution,
+    subdomains: osmProvider.subdomains || 'abc',
+    maxNativeZoom: osmProvider.maxNativeZoom || 19,
     maxZoom: effectiveMaxZoom,
     crossOrigin: true
+  });
+
+  // 2. Provedor Mapbox Streets
+  const mapboxProvider = TILE_PROVIDERS['mapbox-streets'] || TILE_PROVIDERS['carto-positron'];
+  const mapboxLayer = L.tileLayer(mapboxProvider.url, {
+    attribution: mapboxProvider.attribution,
+    subdomains: '',
+    maxNativeZoom: mapboxProvider.maxNativeZoom || 22,
+    maxZoom: effectiveMaxZoom,
+    tileSize: 256,
+    crossOrigin: true
+  });
+
+  // 3. Provedor Carto Positron (Claro)
+  const cartoProvider = TILE_PROVIDERS['carto-positron'];
+  const cartoLayer = L.tileLayer(cartoProvider.url, {
+    attribution: cartoProvider.attribution,
+    subdomains: cartoProvider.subdomains || 'abcd',
+    maxNativeZoom: cartoProvider.maxNativeZoom || 19,
+    maxZoom: effectiveMaxZoom,
+    crossOrigin: true
+  });
+
+  baseLayerInstances['osm-standard'] = osmLayer;
+  baseLayerInstances['mapbox-streets'] = mapboxLayer;
+  baseLayerInstances['carto-positron'] = cartoLayer;
+
+  const baseLayers = {
+    'OpenStreetMap (Padrão)': osmLayer,
+    'Mapbox Streets': mapboxLayer,
+    'Carto Claro': cartoLayer
+  };
+
+  layerControl = L.control.layers(baseLayers, null, {
+    position: 'topright',
+    collapsed: true
   }).addTo(map);
+
+  map.on('baselayerchange', (e) => {
+    let selectedId = 'osm-standard';
+    if (e.name === 'Mapbox Streets') {
+      selectedId = 'mapbox-streets';
+    } else if (e.name === 'Carto Claro') {
+      selectedId = 'carto-positron';
+    } else {
+      selectedId = 'osm-standard';
+    }
+
+    if (store.selectedTileProvider !== selectedId) {
+      store.selectedTileProvider = selectedId;
+      store.saveSettings();
+    }
+
+    currentTileLayer = e.layer;
+    currentTileLayer.bringToBack();
+    if (mapLayers.floor) {
+      mapLayers.floor.bringToBack();
+      currentTileLayer.bringToBack();
+    }
+  });
+
+  // Ativa a camada inicial configurada
+  applyTileLayer(store.selectedTileProvider);
+}
+
+// Aplicação de camada base de tiles sincronizada com o Layer Control
+function applyTileLayer(providerId) {
+  if (!map) return;
+
+  const effectiveMaxZoom = store.maxZoomLevel || MAP_CONFIG.zoom.MAX;
+
+  if (baseLayerInstances[providerId]) {
+    const targetLayer = baseLayerInstances[providerId];
+    targetLayer.options.maxZoom = effectiveMaxZoom;
+
+    Object.values(baseLayerInstances).forEach((layer) => {
+      if (layer !== targetLayer && map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+
+    if (currentTileLayer && currentTileLayer !== targetLayer && map.hasLayer(currentTileLayer)) {
+      map.removeLayer(currentTileLayer);
+    }
+
+    if (!map.hasLayer(targetLayer)) {
+      targetLayer.addTo(map);
+    }
+    currentTileLayer = targetLayer;
+  } else {
+    // Provedor personalizado (Google Satélite, Carto Dark, etc.)
+    Object.values(baseLayerInstances).forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+
+    if (currentTileLayer && map.hasLayer(currentTileLayer)) {
+      map.removeLayer(currentTileLayer);
+    }
+
+    const provider = TILE_PROVIDERS[providerId] || TILE_PROVIDERS['osm-standard'];
+    currentTileLayer = L.tileLayer(provider.url, {
+      attribution: provider.attribution,
+      subdomains: provider.subdomains || 'abc',
+      maxNativeZoom: provider.maxNativeZoom || 19,
+      maxZoom: effectiveMaxZoom,
+      crossOrigin: true
+    }).addTo(map);
+  }
 
   currentTileLayer.bringToBack();
   if (mapLayers.floor) {
@@ -128,8 +241,8 @@ function initMap() {
     zoomControl: false
   });
 
-  // Camada base dinâmica com suporte a super zoom
-  applyTileLayer(store.selectedTileProvider);
+  // Configura controle de camadas nativo do Leaflet com suporte a Mapbox API e OSM
+  setupLayerControl();
 
   map.on('click', () => {
     if (store.selectedRoom && !store.navigation.isActive) {
@@ -401,34 +514,32 @@ function drawNavigationRoute() {
     return;
   }
 
-  // 1. Desenhar rotas alternativas no andar correspondente (se existirem)
+  // 1. Desenhar a rota alternativa viável (estilo visual diferenciado com linha tracejada e opacidade reduzida)
   if (store.routes && store.routes.length > 1) {
     mapLayers.alternativeRoutes = L.layerGroup();
-    store.routes.forEach((altRoute, altIdx) => {
-      if (altIdx === store.selectedRouteIndex) return;
-      const altFloorNodes = altRoute.nodes.filter((n) => String(n.andar) === currentFloorStr);
-      if (altFloorNodes.length < 2) return;
+    const altIdx = store.selectedRouteIndex === 0 ? 1 : 0;
+    const altRoute = store.routes[altIdx];
 
-      const altCoords = altFloorNodes.map((n) => [n.lat, n.lng]);
-      const altPolyline = L.polyline(altCoords, {
-        color: '#94a3b8',
-        weight: 5,
-        dashArray: '6, 8',
-        opacity: 0.65
-      });
-      altPolyline.bindTooltip(`Alternativa ${altIdx}: ${altRoute.totalDistance}m (clique para alternar)`, {
-        sticky: true
-      });
-      altPolyline.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        store.selectRoute(altIdx);
-      });
-      mapLayers.alternativeRoutes.addLayer(altPolyline);
-    });
+    if (altRoute) {
+      const altFloorNodes = altRoute.nodes.filter((n) => String(n.andar) === currentFloorStr);
+      if (altFloorNodes.length >= 2) {
+        const altCoords = altFloorNodes.map((n) => [n.lat, n.lng]);
+        const altPolyline = L.polyline(altCoords, ROUTE_STYLES.alternativeRoute);
+        altPolyline.bindTooltip(
+          `<b>Rota Alternativa:</b> ${altRoute.totalDistance} m <span style="font-size:10px;display:block;opacity:0.8;">(clique para alternar)</span>`,
+          { sticky: true }
+        );
+        altPolyline.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          store.selectRoute(altIdx);
+        });
+        mapLayers.alternativeRoutes.addLayer(altPolyline);
+      }
+    }
     mapLayers.alternativeRoutes.addTo(map);
   }
 
-  // 2. Traçado da rota no andar correspondente (Azul Neon animado)
+  // 2. Traçado da rota principal no andar correspondente (Azul Neon animado)
   if (floorNodes.length >= 2) {
     const floorCoords = floorNodes.map((n) => [n.lat, n.lng]);
     mapLayers.activeRoute = L.polyline(floorCoords, ROUTE_STYLES.activeDijkstraRoute).addTo(map);
@@ -436,41 +547,86 @@ function drawNavigationRoute() {
 
   // 3. Marcador de Ponto de Partida
   const startNode = route[0];
+  const isFloorTransitionActive = store.floorTransition?.active;
+  const isStage1 = store.floorTransition?.stage === 1;
+  const isStage2 = store.floorTransition?.stage === 2;
+
   if (startNode && String(startNode.andar) === currentFloorStr) {
-    mapLayers.originMarker = L.marker([startNode.lat, startNode.lng], {
-      icon: getEndpointIcon('origin'),
-      zIndexOffset: 900
-    }).addTo(map);
-    mapLayers.originMarker.bindTooltip(`<b>Partida:</b> ${startNode.nome}`, { permanent: false });
+    if (isFloorTransitionActive && isStage2) {
+      // Início da Etapa 2: Marcador especial indicando vinda do andar anterior
+      const originFloorName = store.floorTransition.originFloorName;
+      const transName = store.floorTransition.transitionName;
+      const transType = store.floorTransition.type;
+      const isStair = transType === 'escada';
+
+      mapLayers.originMarker = L.marker([startNode.lat, startNode.lng], {
+        icon: getTransitionMarkerIcon(transType),
+        zIndexOffset: 950
+      }).addTo(map);
+
+      const popupContent = `
+        <div class="custom-popup" style="min-width: 220px;">
+          <div class="popup-content">
+            <div class="popup-header flex items-center gap-2">
+              <span>${isStair ? '🪜' : '🛗'}</span> ${transName}
+            </div>
+            <div class="popup-details">
+              <b>Vindo do ${originFloorName}:</b><br/>
+              Prossiga até o destino final no <b>${store.floorTransition.destinationFloorName}</b>.
+            </div>
+            <button id="btn-popup-back-floor" class="popup-button popup-button-secondary mt-2">
+              ← Ver traçado anterior no ${originFloorName}
+            </button>
+          </div>
+        </div>
+      `;
+      mapLayers.originMarker.bindPopup(popupContent);
+      mapLayers.originMarker.on('popupopen', () => {
+        setTimeout(() => {
+          const btn = document.getElementById('btn-popup-back-floor');
+          if (btn) {
+            btn.onclick = () => {
+              store.goToPreviousFloorStage();
+              map.closePopup();
+            };
+          }
+        }, 50);
+      });
+    } else {
+      mapLayers.originMarker = L.marker([startNode.lat, startNode.lng], {
+        icon: getEndpointIcon('origin'),
+        zIndexOffset: 900
+      }).addTo(map);
+      mapLayers.originMarker.bindTooltip(`<b>Partida:</b> ${startNode.nome}`, { permanent: false });
+    }
   }
 
-  // 4. Marcador de Destino / Elevador de Transição
+  // 4. Marcador de Destino / Transição Vertical de Andar
   const endNode = route[route.length - 1];
-  const isFloorTransitionElevator =
-    store.floorTransition?.active &&
-    String(endNode?.andar) === currentFloorStr &&
-    (endNode?.isElevator || endNode?.tipo === 'elevador');
+  if (isFloorTransitionActive && isStage1 && String(endNode?.andar) === currentFloorStr) {
+    // Fim da Etapa 1: Marcador especial de transição para o próximo andar
+    const destFloorName = store.floorTransition.destinationFloorName;
+    const transName = store.floorTransition.transitionName;
+    const transType = store.floorTransition.type;
+    const isStair = transType === 'escada';
 
-  if (isFloorTransitionElevator) {
-    // Marcador especial de transição por elevador
     mapLayers.destinationMarker = L.marker([endNode.lat, endNode.lng], {
-      icon: getElevatorTransitionIcon(),
+      icon: getTransitionMarkerIcon(transType),
       zIndexOffset: 980
     }).addTo(map);
 
-    const destFloorName = store.floorTransition.destinationFloorName;
     const popupContent = `
-      <div class="custom-popup" style="min-width: 200px;">
+      <div class="custom-popup" style="min-width: 220px;">
         <div class="popup-content">
           <div class="popup-header flex items-center gap-2">
-            <span>🛗</span> ${endNode.nome}
+            <span>${isStair ? '🪜' : '🛗'}</span> ${transName}
           </div>
           <div class="popup-details">
             <b>Mudança de Andar Necessária:</b><br/>
-            Suba/desça pelo elevador para chegar ao <b>${destFloorName}</b>.
+            ${isStair ? 'Suba/desça pelas escadas' : 'Suba/desça pelo elevador'} para acessar o <b>${destFloorName}</b>.
           </div>
           <button id="btn-popup-switch-floor" class="popup-button mt-2">
-            Mudar para o ${destFloorName}
+            Ir para o ${destFloorName} →
           </button>
         </div>
       </div>
@@ -603,6 +759,16 @@ watch(
   }
 );
 
+watch(
+  () => store.adminDataVersion,
+  () => {
+    renderFloorView();
+    if (store.navigation.isActive) {
+      drawNavigationRoute();
+    }
+  }
+);
+
 // Controles Interativos
 function zoomIn() {
   if (map) {
@@ -650,6 +816,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (map) {
+    if (layerControl) {
+      map.removeControl(layerControl);
+      layerControl = null;
+    }
     map.remove();
     map = null;
   }
@@ -698,19 +868,33 @@ onUnmounted(() => {
         >
           <div class="flex items-center gap-2">
             <span class="w-7 h-7 rounded-lg bg-amber-400 text-amber-950 flex items-center justify-center font-black text-sm shrink-0">
-              <i class="fa-solid fa-elevator"></i>
+              <i :class="['fa-solid', store.floorTransition.type === 'escada' ? 'fa-stairs' : 'fa-elevator']"></i>
             </span>
-            <span class="leading-tight">
-              Mudança de Andar: Siga até o <b>{{ store.floorTransition.elevatorName }}</b> para ir ao <b>{{ store.floorTransition.destinationFloorName }}</b>
+            <span v-if="store.floorTransition.stage === 1" class="leading-tight">
+              Etapa 1 ({{ store.floorTransition.originFloorName }}): Siga até <b>{{ store.floorTransition.transitionName }}</b> para ir ao <b>{{ store.floorTransition.destinationFloorName }}</b>
+            </span>
+            <span v-else class="leading-tight">
+              Etapa 2 ({{ store.floorTransition.destinationFloorName }}): A partir de <b>{{ store.floorTransition.transitionName }}</b>, siga até <b>{{ store.floorTransition.finalDestinationName }}</b>
             </span>
           </div>
-          <button
-            type="button"
-            @click="store.continueRouteOnDestinationFloor()"
-            class="bg-white hover:bg-amber-50 text-amber-950 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 shrink-0"
-          >
-            Mudar para o {{ store.floorTransition.destinationFloorName }} →
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              v-if="store.floorTransition.stage === 1"
+              type="button"
+              @click="store.continueRouteOnDestinationFloor()"
+              class="bg-white hover:bg-amber-50 text-amber-950 px-3.5 py-2 min-h-[44px] rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center justify-center"
+            >
+              Ir para o {{ store.floorTransition.destinationFloorName }} →
+            </button>
+            <button
+              v-else
+              type="button"
+              @click="store.goToPreviousFloorStage()"
+              class="bg-white hover:bg-amber-50 text-amber-950 px-3.5 py-2 min-h-[44px] rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center justify-center"
+            >
+              ← Ver traçado anterior no {{ store.floorTransition.originFloorName }}
+            </button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -725,7 +909,7 @@ onUnmounted(() => {
         type="button"
         title="Aumentar Zoom"
         @click="zoomIn"
-        class="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl hover:bg-white/10 flex items-center justify-center text-xs sm:text-sm md:text-base font-black transition-all active:scale-90"
+        class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl hover:bg-white/10 flex items-center justify-center text-sm md:text-base font-black transition-all active:scale-90"
       >
         <i class="fa-solid fa-plus"></i>
       </button>
@@ -733,13 +917,13 @@ onUnmounted(() => {
       <!-- Zoom Level Indicator -->
       <div
         id="zoom-indicator-badge"
-        class="text-[8px] sm:text-[9px] font-black tracking-tighter text-slate-300 select-none py-0.5 text-center"
+        class="text-[9px] font-black tracking-tighter text-slate-300 select-none py-0.5 text-center"
         title="Nível de Zoom Atual"
       >
         {{ currentZoom }}x
       </div>
 
-      <div class="w-6 sm:w-8 h-[1px] bg-white/10 my-0.5"></div>
+      <div class="w-8 h-[1px] bg-white/10 my-0.5"></div>
 
       <!-- Floor Selector Stack -->
       <button
@@ -747,7 +931,7 @@ onUnmounted(() => {
         type="button"
         @click="store.setFloor('2')"
         :class="[
-          'floor-btn w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl font-black flex items-center justify-center text-[10px] sm:text-xs transition-all active:scale-90',
+          'floor-btn w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl font-black flex items-center justify-center text-xs transition-all active:scale-90',
           store.currentFloor === '2'
             ? 'bg-blue-600 shadow-lg shadow-blue-600/30 text-white active-floor'
             : 'hover:bg-white/10'
@@ -761,7 +945,7 @@ onUnmounted(() => {
         type="button"
         @click="store.setFloor('1')"
         :class="[
-          'floor-btn w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl font-black flex items-center justify-center text-[10px] sm:text-xs transition-all active:scale-90',
+          'floor-btn w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl font-black flex items-center justify-center text-xs transition-all active:scale-90',
           store.currentFloor === '1'
             ? 'bg-blue-600 shadow-lg shadow-blue-600/30 text-white active-floor'
             : 'hover:bg-white/10'
@@ -775,7 +959,7 @@ onUnmounted(() => {
         type="button"
         @click="store.setFloor('0')"
         :class="[
-          'floor-btn w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl font-black flex items-center justify-center text-[10px] sm:text-xs transition-all active:scale-90',
+          'floor-btn w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl font-black flex items-center justify-center text-xs transition-all active:scale-90',
           store.currentFloor === '0'
             ? 'bg-blue-600 shadow-lg shadow-blue-600/30 text-white active-floor'
             : 'hover:bg-white/10'
@@ -784,7 +968,7 @@ onUnmounted(() => {
         T
       </button>
 
-      <div class="w-6 sm:w-8 h-[1px] bg-white/10 my-0.5"></div>
+      <div class="w-8 h-[1px] bg-white/10 my-0.5"></div>
 
       <!-- Zoom Out -->
       <button
@@ -792,7 +976,7 @@ onUnmounted(() => {
         type="button"
         title="Diminuir Zoom"
         @click="zoomOut"
-        class="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg sm:rounded-xl hover:bg-white/10 flex items-center justify-center text-xs sm:text-sm md:text-base font-black transition-all active:scale-90"
+        class="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl hover:bg-white/10 flex items-center justify-center text-sm md:text-base font-black transition-all active:scale-90"
       >
         <i class="fa-solid fa-minus"></i>
       </button>

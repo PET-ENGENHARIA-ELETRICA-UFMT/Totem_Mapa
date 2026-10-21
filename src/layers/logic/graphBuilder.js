@@ -12,7 +12,9 @@ import {
   findNearestNode,
   formatLocationName,
   distToSegment,
-  segmentCrossesPolygon
+  segmentCrossesPolygon,
+  segmentCrossesAnyRoom,
+  SNAPPING_THRESHOLD_METERS
 } from './spatialUtils.js';
 
 export class GraphBuilder {
@@ -37,18 +39,32 @@ export class GraphBuilder {
   }
 
   /**
-   * Registra um nó no grafo se ainda não existir
+   * Registra um nó no grafo se ainda não existir, fundindo nós coincidentes
+   * através da chave canônica de coordenadas a 7 casas decimais.
    */
   addNode(node) {
+    const coordKey = this.getCoordKey(node.lng, node.lat, node.andar);
+
+    // Se já existir nó registrado nessas exatas coordenadas e andar, reutiliza-o
+    if (this.coordToNodeMap.has(coordKey)) {
+      const existingId = this.coordToNodeMap.get(coordKey);
+      const existingNode = this.nodes.get(existingId);
+      if (existingNode) {
+        if (node.isCorridorPoint) {
+          this.corridorNodes.set(existingId, existingNode);
+        }
+        return existingNode;
+      }
+    }
+
     if (!this.nodes.has(node.id)) {
       this.nodes.set(node.id, node);
       this.adjList.set(node.id, []);
     }
+
     const registered = this.nodes.get(node.id);
-    const coordKey = this.getCoordKey(node.lng, node.lat, node.andar);
-    if (!this.coordToNodeMap.has(coordKey)) {
-      this.coordToNodeMap.set(coordKey, node.id);
-    }
+    this.coordToNodeMap.set(coordKey, node.id);
+
     if (node.isCorridorPoint) {
       this.corridorNodes.set(node.id, registered);
     }
@@ -112,6 +128,15 @@ export class GraphBuilder {
   getOrCreateCorridorNode(lon, lat, andar, explicitName, featureProps = {}) {
     const coordKey = this.getCoordKey(lon, lat, andar);
 
+    if (this.coordToNodeMap.has(coordKey)) {
+      const existingId = this.coordToNodeMap.get(coordKey);
+      const existingNode = this.nodes.get(existingId);
+      if (existingNode) {
+        this.corridorNodes.set(existingId, existingNode);
+        return existingNode;
+      }
+    }
+
     if (explicitName && String(explicitName).trim() !== '') {
       const namedId = String(explicitName).trim();
 
@@ -139,13 +164,6 @@ export class GraphBuilder {
       return this.addNode(newNode);
     }
 
-    if (this.coordToNodeMap.has(coordKey)) {
-      const existingId = this.coordToNodeMap.get(coordKey);
-      const existingNode = this.nodes.get(existingId);
-      this.corridorNodes.set(existingId, existingNode);
-      return existingNode;
-    }
-
     const genericId = `node_${Number(lon).toFixed(7)}_${Number(lat).toFixed(7)}_${andar}`;
     const newNode = {
       id: genericId,
@@ -169,6 +187,7 @@ export class GraphBuilder {
    * 1. Rotas iniciam e terminam no centroide exato das salas.
    * 2. As rotas não atravessam nenhuma sala intermediária.
    * 3. Projeção de portas na malha de corredores com subdivisão contínua.
+   * 4. Respeito estrito ao threshold de snapping (8m) e portas perimetrais.
    * 
    * @param {Object} corredoresData 
    * @param {Object} salasData 
@@ -189,46 +208,58 @@ export class GraphBuilder {
     }
     const allFloors = Array.from(floorsSet);
 
-    // 1. Processar e estruturar segmentos de corredor por andar
+    // 1. Processar e estruturar segmentos de corredor
     const rawSegments = [];
     if (corredoresData && corredoresData.features) {
-      allFloors.forEach((floorStr) => {
-        corredoresData.features.forEach((feature, featIdx) => {
-          const props = feature.properties || {};
-          if (props.ativo === false) return; // Ignora arestas inativas
+      corredoresData.features.forEach((feature, featIdx) => {
+        const props = feature.properties || {};
+        if (props.ativo === false) return; // Ignora arestas inativas
 
-          const geom = feature.geometry;
-          if (!geom || geom.type !== 'LineString' || !Array.isArray(geom.coordinates)) return;
-          const coords = geom.coordinates;
-          if (coords.length < 2) return;
+        const geom = feature.geometry;
+        if (!geom || geom.type !== 'LineString' || !Array.isArray(geom.coordinates)) return;
+        const coords = geom.coordinates;
+        if (coords.length < 2) return;
 
-          const tipo = (props.tipo || 'corredor').toLowerCase();
-          const acessivel = props.acessivel !== false && tipo !== 'escada';
-          const bloco = props.bloco || 'faet';
-          const featureId = props.id || null;
+        const isSpecificF1 = props.id && props.id.includes('_a1_');
+        const isSpecificF2 = props.id && props.id.includes('_a2_');
+        const isSpecificT = props.id && props.id.includes('_t_') && featIdx > 25;
 
+        // Distribuição arquitetural de corredores:
+        // - As vias 0 a 25 compõem o anel central do prédio que se repete nos pisos 0 e 1
+        // - As vias com IDs específicos de andar pertencem exclusivamente ao piso indicado
+        let targetFloors = [];
+        if (isSpecificF2) {
+          targetFloors = ['2'];
+        } else if (isSpecificF1) {
+          targetFloors = ['1'];
+        } else if (isSpecificT) {
+          targetFloors = ['0'];
+        } else {
+          targetFloors = ['0', '1'];
+        }
+
+        const tipo = (props.tipo || 'corredor').toLowerCase();
+        const acessivel = props.acessivel !== false && tipo !== 'escada';
+        const bloco = props.bloco || 'faet';
+        const featureId = props.id || null;
+
+        targetFloors.forEach((floorStr) => {
           for (let i = 0; i < coords.length - 1; i++) {
             const p1 = coords[i];
             const p2 = coords[i + 1];
 
-            // Manter IDs canônicos para piso 0 e com sufixo consistente para outros pisos
-            const id1 =
-              floorStr === '0'
-                ? i === 0 && props.origem
-                  ? props.origem
-                  : `node_${Number(p1[0]).toFixed(7)}_${Number(p1[1]).toFixed(7)}_0`
-                : i === 0 && props.origem
-                  ? `${props.origem}_a${floorStr}`
-                  : `node_${Number(p1[0]).toFixed(7)}_${Number(p1[1]).toFixed(7)}_a${floorStr}`;
+            let oName = i === 0 && props.origem ? props.origem : null;
+            let dName = i === coords.length - 2 && props.destino ? props.destino : null;
 
-            const id2 =
-              floorStr === '0'
-                ? i === coords.length - 2 && props.destino
-                  ? props.destino
-                  : `node_${Number(p2[0]).toFixed(7)}_${Number(p2[1]).toFixed(7)}_0`
-                : i === coords.length - 2 && props.destino
-                  ? `${props.destino}_a${floorStr}`
-                  : `node_${Number(p2[0]).toFixed(7)}_${Number(p2[1]).toFixed(7)}_a${floorStr}`;
+            if (oName && floorStr !== '0' && !oName.endsWith('_a' + floorStr)) {
+              oName = `${oName}_a${floorStr}`;
+            }
+            if (dName && floorStr !== '0' && !dName.endsWith('_a' + floorStr)) {
+              dName = `${dName}_a${floorStr}`;
+            }
+
+            const id1 = oName || `node_${Number(p1[0]).toFixed(7)}_${Number(p1[1]).toFixed(7)}_${floorStr}`;
+            const id2 = dName || `node_${Number(p2[0]).toFixed(7)}_${Number(p2[1]).toFixed(7)}_${floorStr}`;
 
             const node1 = this.addNode({
               id: id1,
@@ -283,11 +314,11 @@ export class GraphBuilder {
         const props = feature.properties || {};
         const roomName = props.nome || `Sala ${idx + 1}`;
         const andar = String(props.andar ?? 0);
-        const tipo = (props.tipo || 'sala').toLowerCase();
+        const tipo = (props.tipo_uso || props.tipo || 'sala').toLowerCase();
         const bloco = props.bloco || 'faet';
         const acessivel = props.acessivel !== false;
 
-        // Centroide geográfico exato
+        // Centroide geográfico exato (Teorema de Green / Shoelace)
         const centroid = calculateCentroid(feature.geometry);
         const cLon = centroid[0];
         const cLat = centroid[1];
@@ -300,19 +331,27 @@ export class GraphBuilder {
             ? feature.geometry.coordinates[0]?.[0]
             : null;
 
-        // Gerar candidatos a ponto de porta ao longo do perímetro da sala
-        const doorCandidates = [];
-        if (ring && ring.length >= 3) {
-          for (let i = 0; i < ring.length - 1; i++) {
-            for (const frac of [0.15, 0.3, 0.5, 0.7, 0.85]) {
-              doorCandidates.push([
-                ring[i][0] + (ring[i + 1][0] - ring[i][0]) * frac,
-                ring[i][1] + (ring[i + 1][1] - ring[i][1]) * frac
-              ]);
+        // Candidatos a porta:
+        // 1. Se props.porta estiver explicitamente preenchido com coordenadas [lon, lat], usá-lo como prioridade
+        let doorCandidates = [];
+        if (Array.isArray(props.porta) && props.porta.length >= 2) {
+          doorCandidates.push([Number(props.porta[0]), Number(props.porta[1])]);
+        } else {
+          // Se porta for nulo, gera candidatos ao longo do perímetro da sala
+          if (ring && ring.length >= 3) {
+            for (let i = 0; i < ring.length - 1; i++) {
+              for (const frac of [0.15, 0.3, 0.5, 0.7, 0.85]) {
+                doorCandidates.push([
+                  ring[i][0] + (ring[i + 1][0] - ring[i][0]) * frac,
+                  ring[i][1] + (ring[i + 1][1] - ring[i][1]) * frac
+                ]);
+              }
             }
           }
+          if (doorCandidates.length === 0) {
+            doorCandidates.push(centroid);
+          }
         }
-        doorCandidates.push(centroid);
 
         // Segmentos de corredor no mesmo andar (ou fallback de andar)
         let floorSegs = rawSegments.filter((s) => s.andar === andar);
@@ -414,7 +453,7 @@ export class GraphBuilder {
         });
 
         if (bestConn) {
-          // 2. Nó da Porta (no limite perimetral livre)
+          // 2. Nó da Porta (no limite perimetral livre de obstáculos)
           const doorNode = this.addNode({
             id: doorId,
             lat: bestConn.door[1],
@@ -442,31 +481,60 @@ export class GraphBuilder {
             isCorridorPoint: true
           });
 
-          // Aresta Centroide <-> Porta (dentro da sala)
-          const dCentroidDoor = calculateDistance(roomNode.lat, roomNode.lng, doorNode.lat, doorNode.lng);
-          this.addEdge(roomId, doorId, dCentroidDoor, {
-            tipo: 'sala',
-            acessivel: true,
-            andar,
-            bloco,
-            isConnector: true
-          });
+          // 4. Conexão Geométrica com Restrição de Snapping (Threshold: 8.0m)
+          const dCentroidProj = calculateDistance(roomNode.lat, roomNode.lng, projNode.lat, projNode.lng);
+          const directCrossesOtherRoom = segmentCrossesAnyRoom(centroid, bestConn.proj, salasData.features, andar, idx);
 
-          // Aresta Porta <-> Projeção Corredor (acesso sem cruzar salas)
-          const dDoorProj = calculateDistance(doorNode.lat, doorNode.lng, projNode.lat, projNode.lng);
-          this.addEdge(doorId, projId, dDoorProj, {
-            tipo: 'corredor',
-            acessivel: true,
-            andar,
-            bloco,
-            isConnector: true
-          });
+          // Salto direto (snap) só ocorre se estiver a <= 8m do corredor e NÃO cortar nenhuma sala
+          const canDirectSnap = dCentroidProj <= SNAPPING_THRESHOLD_METERS && !directCrossesOtherRoom;
+
+          if (canDirectSnap) {
+            this.addEdge(roomNode.id, projNode.id, dCentroidProj, {
+              tipo: 'sala_snap',
+              acessivel: true,
+              andar,
+              bloco,
+              isConnector: true
+            });
+          }
+
+          if (doorNode.id !== roomNode.id) {
+            // Conexão via porta perimetral (garante caminho contínuo sem cruzar salas quando > 8m ou quando snap direto cruzar)
+            const dCentroidDoor = calculateDistance(roomNode.lat, roomNode.lng, doorNode.lat, doorNode.lng);
+            this.addEdge(roomNode.id, doorNode.id, dCentroidDoor, {
+              tipo: 'sala',
+              acessivel: true,
+              andar,
+              bloco,
+              isConnector: true
+            });
+
+            // Aresta Porta <-> Projeção Corredor (acesso sem cruzar salas)
+            const dDoorProj = calculateDistance(doorNode.lat, doorNode.lng, projNode.lat, projNode.lng);
+            this.addEdge(doorNode.id, projNode.id, dDoorProj, {
+              tipo: 'corredor',
+              acessivel: true,
+              andar,
+              bloco,
+              isConnector: true
+            });
+          } else {
+            // Se doorNode coincidir com roomNode, conecta roomNode diretamente à projeção no corredor
+            const dRoomProj = calculateDistance(roomNode.lat, roomNode.lng, projNode.lat, projNode.lng);
+            this.addEdge(roomNode.id, projNode.id, dRoomProj, {
+              tipo: 'sala',
+              acessivel: true,
+              andar,
+              bloco,
+              isConnector: true
+            });
+          }
 
           // Registrar projeção para subdivisão do segmento de corredor
           bestConn.seg.subPoints.push({
             t: bestConn.t,
             proj: bestConn.proj,
-            nodeId: projId,
+            nodeId: projNode.id,
             node: projNode
           });
         }
@@ -476,7 +544,7 @@ export class GraphBuilder {
       });
     }
 
-    // 4. Processar Pontos de Interesse (POIs: elevadores, banheiros, etc.)
+    // 4. Processar Pontos de Interesse (POIs: elevadores, banheiros, totens, etc.)
     if (pontosData && pontosData.features) {
       pontosData.features.forEach((feature, idx) => {
         const props = feature.properties || {};

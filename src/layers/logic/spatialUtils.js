@@ -102,13 +102,19 @@ export function calculateCentroid(geometry) {
     const ring = poly[0];
     if (!ring || ring.length < 3) continue;
 
+    // Translação relativa ao primeiro vértice para evitar cancelamento catastrófico IEEE-754
+    const refX = ring[0][0];
+    const refY = ring[0][1];
+
     let area = 0;
     let cx = 0;
     let cy = 0;
 
     for (let i = 0; i < ring.length - 1; i++) {
-      const [x0, y0] = ring[i];
-      const [x1, y1] = ring[i + 1];
+      const x0 = ring[i][0] - refX;
+      const y0 = ring[i][1] - refY;
+      const x1 = ring[i + 1][0] - refX;
+      const y1 = ring[i + 1][1] - refY;
       const factor = x0 * y1 - x1 * y0;
       area += factor;
       cx += (x0 + x1) * factor;
@@ -118,9 +124,9 @@ export function calculateCentroid(geometry) {
     area = area / 2;
     const absArea = Math.abs(area);
 
+    let centroidPoint;
     if (absArea > 1e-12) {
-      cx = cx / (6 * area);
-      cy = cy / (6 * area);
+      centroidPoint = [refX + cx / (6 * area), refY + cy / (6 * area)];
     } else {
       let sx = 0;
       let sy = 0;
@@ -128,13 +134,27 @@ export function calculateCentroid(geometry) {
         sx += x;
         sy += y;
       }
-      cx = sx / ring.length;
-      cy = sy / ring.length;
+      centroidPoint = [sx / ring.length, sy / ring.length];
+    }
+
+    // Se o centroide cair fora do polígono (ex: polígonos côncavos em L ou U), faz fallback para a média dos vértices
+    if (!pointInPolygon(centroidPoint, ring)) {
+      let sx = 0;
+      let sy = 0;
+      const n = ring.length - 1;
+      for (let i = 0; i < n; i++) {
+        sx += ring[i][0];
+        sy += ring[i][1];
+      }
+      const meanPoint = [sx / n, sy / n];
+      if (pointInPolygon(meanPoint, ring)) {
+        centroidPoint = meanPoint;
+      }
     }
 
     if (absArea > maxArea) {
       maxArea = absArea;
-      bestCentroid = [cx, cy];
+      bestCentroid = centroidPoint;
     }
   }
 
@@ -520,13 +540,87 @@ export function segmentsIntersect(a1, a2, b1, b2) {
   return (ccw(a1, b1, b2) !== ccw(a2, b1, b2)) && (ccw(a1, a2, b1) !== ccw(a1, a2, b2));
 }
 
+export const SNAPPING_THRESHOLD_METERS = 8.0;
+
 /**
- * Verifica se um segmento de reta corta as bordas de um polígono
+ * Verifica se um segmento de reta corta as bordas ou interior de um polígono
  */
 export function segmentCrossesPolygon(p1, p2, ring) {
+  return segmentIntersectsPolygonInterior(p1, p2, ring);
+}
+
+/**
+ * Verifica se um ponto 2D [lon, lat] está estritamente contido no interior de um anel de polígono
+ * Algoritmo clássico de Ray-Casting (Even-Odd rule)
+ * @param {[number, number]} point [lon, lat]
+ * @param {Array<[number, number]>} ring Anel de coordenadas [[lon, lat], ...]
+ * @returns {boolean}
+ */
+export function pointInPolygon(point, ring) {
   if (!ring || ring.length < 3) return false;
+  const x = point[0];
+  const y = point[1];
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Determina se um segmento de reta entre p1 e p2 cruza as bordas ou o interior de um polígono
+ * @param {[number, number]} p1 [lon, lat]
+ * @param {[number, number]} p2 [lon, lat]
+ * @param {Array<[number, number]>} ring
+ * @returns {boolean}
+ */
+export function segmentIntersectsPolygonInterior(p1, p2, ring) {
+  if (!ring || ring.length < 3) return false;
+  // 1. Verifica cruzamento de arestas
   for (let i = 0; i < ring.length - 1; i++) {
     if (segmentsIntersect(p1, p2, ring[i], ring[i + 1])) {
+      return true;
+    }
+  }
+  // 2. Verifica se o ponto médio do segmento está dentro do polígono
+  const midPoint = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+  if (pointInPolygon(midPoint, ring)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Valida se um segmento de reta corta qualquer sala do andar especificado
+ * @param {[number, number]} p1 
+ * @param {[number, number]} p2 
+ * @param {Array<Object>} salasFeatures 
+ * @param {string|number} floor 
+ * @param {number|null} ignoreIdx Índice da sala de origem/destino a ignorar se aplicável
+ * @returns {boolean} True se cortar alguma sala indevida
+ */
+export function segmentCrossesAnyRoom(p1, p2, salasFeatures, floor, ignoreIdx = null) {
+  if (!salasFeatures || !salasFeatures.length) return false;
+  const floorStr = String(floor);
+
+  for (let i = 0; i < salasFeatures.length; i++) {
+    if (ignoreIdx !== null && i === ignoreIdx) continue;
+    const feat = salasFeatures[i];
+    if (String(feat.properties?.andar ?? 0) !== floorStr) continue;
+
+    const ring =
+      feat.geometry?.type === 'Polygon'
+        ? feat.geometry.coordinates[0]
+        : feat.geometry?.type === 'MultiPolygon'
+        ? feat.geometry.coordinates[0]?.[0]
+        : null;
+
+    if (segmentIntersectsPolygonInterior(p1, p2, ring)) {
       return true;
     }
   }

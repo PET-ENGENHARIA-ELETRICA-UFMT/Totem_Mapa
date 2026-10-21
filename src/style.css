@@ -604,4 +604,79 @@ html.dark .sala-label {
   }
 }
 
+/* ===================================================================
+   LEAFLET NATIVE LAYER CONTROL (MAPBOX vs PADRÃO)
+   =================================================================== */
+.leaflet-control-layers {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-radius: 1rem !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+  font-family: inherit !important;
+  padding: 6px 10px !important;
+  color: #1e293b !important;
+  transition: all 0.2s ease !important;
+}
+
+.dark .leaflet-control-layers {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+
+.leaflet-control-layers-toggle {
+  background-size: 20px 20px !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 0.75rem !important;
+}
+
+.leaflet-control-layers-expanded {
+  padding: 10px 14px !important;
+}
+
+.leaflet-control-layers label {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  margin-bottom: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+}
+
+.leaflet-control-layers-base input[type='radio'] {
+  accent-color: #2563eb !important;
+  cursor: pointer !important;
+}
+
+/* ===================================================================
+   ROTA ALTERNATIVA LEAFLET
+   =================================================================== */
+.leaflet-route-alternative {
+  cursor: pointer !important;
+  transition: stroke 0.25s ease, stroke-width 0.25s ease, opacity 0.25s ease;
+}
+
+.leaflet-route-alternative:hover {
+  stroke: #3b82f6 !important;
+  stroke-width: 6.5px !important;
+  opacity: 0.95 !important;
+}
+
+/* ===================================================================
+   MARCADOR DE TRANSIÇÃO VERTICAL (ELEVADOR / ESCADA)
+   =================================================================== */
+.vertical-transition-marker {
+  transition: transform 0.2s ease;
+}
+
+.vertical-transition-marker:hover {
+  transform: scale(1.12);
+}
+
+
 

@@ -349,12 +349,16 @@ function getCategoryIconClass(category) {
             </p>
           </div>
         </div>
-        <!-- Badge FAET -->
-        <span
-          class="px-2.5 py-1 text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 rounded-full border border-emerald-200/50 dark:border-emerald-900/30"
+        <!-- Botão Admin -->
+        <button
+          type="button"
+          @click="store.openAdminModal()"
+          title="Abrir Painel do Administrador"
+          class="px-2.5 py-1 text-[9px] font-black bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 rounded-full border border-amber-500/30 flex items-center gap-1 transition-all active:scale-95"
         >
-          FAET
-        </span>
+          <i class="fa-solid fa-user-shield text-[10px]"></i>
+          <span>Admin</span>
+        </button>
       </div>
 
       <!-- Tab Switcher -->
@@ -931,7 +935,7 @@ function getCategoryIconClass(category) {
             Limpar Caminho
           </button>
 
-          <!-- Route Options Selector (when alternatives exist) -->
+          <!-- Route Options Selector (Principal e 1 Alternativa Viável) -->
           <div
             v-if="store.hasAlternatives"
             id="route-alternatives-selector"
@@ -940,11 +944,11 @@ function getCategoryIconClass(category) {
             <span
               class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block"
             >
-              Opções de Rota ({{ store.routes.length }})
+              Opções de Trajeto (Principal e Alternativa)
             </span>
-            <div :class="['grid gap-2', store.routes.length === 3 ? 'grid-cols-3' : 'grid-cols-2']">
+            <div class="grid grid-cols-2 gap-2">
               <button
-                v-for="(r, idx) in store.routes"
+                v-for="(r, idx) in store.routes.slice(0, 2)"
                 :key="r.id"
                 type="button"
                 @click="store.selectRoute(idx)"
@@ -957,13 +961,19 @@ function getCategoryIconClass(category) {
               >
                 <div class="flex items-center justify-between gap-1">
                   <span class="text-[10px] font-black uppercase tracking-tight">
-                    {{ r.isPrimary ? 'Mais Rápida' : `Alternativa ${idx}` }}
+                    {{ r.isPrimary ? 'Principal' : 'Alternativa' }}
                   </span>
                   <span
                     v-if="r.isPrimary"
                     class="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                   >
                     ★
+                  </span>
+                  <span
+                    v-else
+                    class="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  >
+                    Alt
                   </span>
                 </div>
                 <div class="text-xs font-black text-slate-800 dark:text-slate-100">

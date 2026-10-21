@@ -7,7 +7,7 @@
 import { defineStore } from 'pinia';
 import { dataLoader } from '../layers/data/dataLoader.js';
 import { RouteEngine } from '../layers/logic/engine.js';
-import { MAP_CONFIG } from '../layers/logic/spatialUtils.js';
+import { calculateDistance, MAP_CONFIG } from '../layers/logic/spatialUtils.js';
 import { TILE_PROVIDERS, DEFAULT_TILE_PROVIDER_ID } from '../layers/data/tileProviders.js';
 
 export const useMainStore = defineStore('main', {
@@ -91,7 +91,12 @@ export const useMainStore = defineStore('main', {
 
     // Recurso de Transição de Andar (Mudança de andar / Elevador)
     floorTransition: null,
-    filterRoutesByCurrentFloor: true
+    filterRoutesByCurrentFloor: true,
+
+    // Modal de Administrador e Gestão Topológica
+    isAdminModalOpen: false,
+    adminDataVersion: 0,
+    adminOverrides: {}
   }),
 
   getters: {
@@ -281,6 +286,9 @@ export const useMainStore = defineStore('main', {
         this.geoData.pontos = pontos;
         this.geoData.corredores = corredores;
 
+        // Aplicar personalizações salvas pelo Administrador
+        this.applyAdminOverridesToGeoData();
+
         // Construir Grafo de Navegação com arquitetura desacoplada
         this.routeEngine = new RouteEngine(corredores, salas, pontos);
         this.locations = this.routeEngine.locations;
@@ -297,10 +305,26 @@ export const useMainStore = defineStore('main', {
     },
 
     /**
-     * Alterna o andar ativo
+     * Alterna o andar ativo e sincroniza etapas da rota multi-andares se aplicável
      */
     setFloor(floor) {
-      this.currentFloor = String(floor);
+      const f = String(floor);
+      this.currentFloor = f;
+
+      if (this.floorTransition && this.floorTransition.active) {
+        if (f === String(this.floorTransition.destinationFloor)) {
+          if (this.floorTransition.stage !== 2) {
+            this.switchFloorTransitionStage(2);
+          }
+        } else if (f === String(this.floorTransition.originFloor)) {
+          if (this.floorTransition.stage !== 1) {
+            this.switchFloorTransitionStage(1);
+          }
+        } else {
+          // Andar não participante do trajeto
+          this.routes = [];
+        }
+      }
     },
 
     /**
@@ -528,81 +552,148 @@ export const useMainStore = defineStore('main', {
       const originFloor = originLoc?.andar !== undefined ? String(originLoc.andar) : String(this.currentFloor);
       const destFloor = destLoc?.andar !== undefined ? String(destLoc.andar) : String(this.currentFloor);
 
-      // CASO A: Origem e Destino em andares diferentes -> Necessidade de Mudança de Andar
+      // CASO A: Origem e Destino em andares diferentes -> Navegação Multi-Andares (2 etapas contínuas)
       if (originFloor !== destFloor) {
         const originFloorName = originFloor === '0' ? 'Térreo' : `${originFloor}º Andar`;
         const destFloorName = destFloor === '0' ? 'Térreo' : `${destFloor}º Andar`;
 
-        // Localizar elevadores nos andares de origem e destino
-        const originElevators = this.locations.filter(
-          (l) => (l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador')) &&
-                 !l.isDisabled &&
-                 String(l.andar) === originFloor
-        );
-        const destElevators = this.locations.filter(
-          (l) => (l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador')) &&
-                 !l.isDisabled &&
-                 String(l.andar) === destFloor
-        );
+        // 1. Filtrar conectores verticais disponíveis no andar de origem (Elevadores ou Escadas)
+        const originCandidates = this.locations.filter((l) => {
+          if (String(l.andar) !== originFloor || l.isDisabled) return false;
+          if (this.isAccessible) {
+            return l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador') || l.tipo === 'rampa';
+          }
+          return (
+            l.isElevator ||
+            l.tipo === 'elevador' ||
+            l.nome.toLowerCase().includes('elevador') ||
+            l.tipo === 'escada' ||
+            l.nome.toLowerCase().includes('escada') ||
+            l.tipo === 'rampa'
+          );
+        });
 
-        const targetElevatorOrigin = originElevators[0] || null;
-        const targetElevatorDest = destElevators[0] || null;
+        // 2. Para cada conector na origem, emparelhar com o conector equivalente no andar de destino
+        const validPairs = [];
+        for (const oCand of originCandidates) {
+          const isElev = oCand.isElevator || oCand.tipo === 'elevador' || oCand.nome.toLowerCase().includes('elevador');
+          const isStair = oCand.tipo === 'escada' || oCand.nome.toLowerCase().includes('escada');
 
-        if (!targetElevatorOrigin) {
+          const destCandidates = this.locations.filter((l) => {
+            if (String(l.andar) !== destFloor || l.isDisabled) return false;
+            if (isElev) {
+              return l.isElevator || l.tipo === 'elevador' || l.nome.toLowerCase().includes('elevador');
+            }
+            if (isStair) {
+              return l.tipo === 'escada' || l.nome.toLowerCase().includes('escada');
+            }
+            return false;
+          });
+
+          if (destCandidates.length > 0) {
+            let bestDest = destCandidates[0];
+            let minD = Infinity;
+            for (const d of destCandidates) {
+              const dist = calculateDistance(oCand.coordinates[1], oCand.coordinates[0], d.coordinates[1], d.coordinates[0]);
+              if (dist < minD) {
+                minD = dist;
+                bestDest = d;
+              }
+            }
+
+            const distFromOrigin = calculateDistance(
+              originLoc.coordinates[1],
+              originLoc.coordinates[0],
+              oCand.coordinates[1],
+              oCand.coordinates[0]
+            );
+
+            validPairs.push({
+              originTrans: oCand,
+              destTrans: bestDest,
+              distFromOrigin,
+              isElev,
+              isStair
+            });
+          }
+        }
+
+        if (validPairs.length === 0) {
           if (showToast) {
-            this.showNotification(`Nenhum elevador encontrado no ${originFloorName} para transição.`, 'error');
+            this.showNotification(`Nenhum elevador ou escada encontrado para ligar o ${originFloorName} ao ${destFloorName}.`, 'error');
           }
           return;
         }
 
+        // Escolhe o par de transição mais próximo do ponto de partida
+        validPairs.sort((a, b) => a.distFromOrigin - b.distFromOrigin);
+        const bestPair = validPairs[0];
+
+        // 3. Pré-calcular as duas etapas da rota (com exatamente 1 rota alternativa viável)
+        const stage1Routes = this.routeEngine.findRoutes(
+          originLoc.id,
+          bestPair.originTrans.id,
+          {
+            accessibilityMode: this.isAccessible,
+            maxAlternatives: 1
+          }
+        );
+
+        const stage2Routes = this.routeEngine.findRoutes(
+          bestPair.destTrans.id,
+          destLoc.id,
+          {
+            accessibilityMode: this.isAccessible,
+            maxAlternatives: 1
+          }
+        );
+
+        if (!stage1Routes || stage1Routes.length === 0) {
+          this.routes = [];
+          this.navigation.isActive = false;
+          if (showToast) {
+            this.showNotification(`Não foi possível traçar rota até ${bestPair.originTrans.nome} no ${originFloorName}.`, 'error');
+          }
+          return;
+        }
+
+        const transType = bestPair.isElev ? 'elevador' : 'escada';
+        const transLabel = bestPair.isElev ? 'o elevador' : 'a escada';
+
         this.floorTransition = {
           active: true,
+          type: transType,
           originFloor,
           destinationFloor: destFloor,
           originFloorName,
           destinationFloorName: destFloorName,
-          elevator: targetElevatorOrigin,
-          elevatorDest: targetElevatorDest,
-          elevatorName: targetElevatorOrigin.nome || 'Elevador FAET',
+          originTransNode: bestPair.originTrans,
+          destTransNode: bestPair.destTrans,
+          transitionName: bestPair.originTrans.nome || (bestPair.isElev ? 'Elevador FAET' : 'Escada'),
+          finalOriginNode: originLoc,
           finalDestinationNode: destLoc,
           finalDestinationName: destLoc?.nome || 'Destino',
-          currentPhase: 'origin_to_elevator'
+          stage: 1,
+          stage1Routes,
+          stage2Routes
         };
 
-        // Calcula a rota no andar correspondente até o Elevador
-        const calculatedRoutes = this.routeEngine.findRoutes(
-          originLoc.id,
-          targetElevatorOrigin.id,
-          {
-            accessibilityMode: this.isAccessible,
-            maxAlternatives: 2
-          }
-        );
-
-        if (!calculatedRoutes || calculatedRoutes.length === 0) {
-          this.routes = [];
-          this.navigation.isActive = false;
-          if (showToast) {
-            this.showNotification(`Não foi possível traçar rota até o elevador no ${originFloorName}.`, 'error');
-          }
-          return;
-        }
-
-        this.routes = calculatedRoutes;
+        this.routes = stage1Routes;
         this.selectRoute(0);
         this.setFloor(originFloor);
         this.setActiveTab('rotas');
 
         if (showToast) {
+          const totalMeters = stage1Routes[0].totalDistance + (stage2Routes[0]?.totalDistance || 0);
           this.showNotification(
-            `Destino no ${destFloorName}. Rota traçada no ${originFloorName} até o ${targetElevatorOrigin.nome} (${calculatedRoutes[0].totalDistance} m).`,
+            `Destino no ${destFloorName}. Rota em 2 etapas via ${transLabel} (${totalMeters} m total).`,
             'info'
           );
         }
         return;
       }
 
-      // CASO B: Mesmo andar -> Rota direta no andar correspondente
+      // CASO B: Mesmo andar -> Rota direta no andar correspondente (1 principal + 1 alternativa viável)
       this.floorTransition = null;
 
       const calculatedRoutes = this.routeEngine.findRoutes(
@@ -610,7 +701,7 @@ export const useMainStore = defineStore('main', {
         this.destinationNodeId,
         {
           accessibilityMode: this.isAccessible,
-          maxAlternatives: 2
+          maxAlternatives: 1
         }
       );
 
@@ -641,51 +732,54 @@ export const useMainStore = defineStore('main', {
         const altCount = calculatedRoutes.length - 1;
         const msg =
           altCount > 0
-            ? `Rota calculada no ${this.currentFloorName}: ${calculatedRoutes[0].totalDistance} m (+${altCount} ${altCount === 1 ? 'alternativa' : 'alternativas'})`
+            ? `Rota calculada no ${this.currentFloorName}: ${calculatedRoutes[0].totalDistance} m (+1 rota alternativa)`
             : `Rota calculada no ${this.currentFloorName}: ${calculatedRoutes[0].totalDistance} m`;
         this.showNotification(msg, 'success');
       }
     },
 
     /**
-     * Continua a rota no andar de destino a partir do elevador até a sala final
+     * Alterna entre a Etapa 1 e Etapa 2 de forma contínua em rotas multi-andares
+     */
+    switchFloorTransitionStage(targetStage) {
+      if (!this.floorTransition || !this.floorTransition.active) return;
+      if (targetStage === 2) {
+        this.floorTransition.stage = 2;
+        this.currentFloor = String(this.floorTransition.destinationFloor);
+        this.routes = this.floorTransition.stage2Routes || [];
+        if (this.routes.length > 0) {
+          this.selectRoute(0);
+        }
+        this.showNotification(
+          `No ${this.floorTransition.destinationFloorName}: siga até ${this.floorTransition.finalDestinationName}.`,
+          'info'
+        );
+      } else if (targetStage === 1) {
+        this.floorTransition.stage = 1;
+        this.currentFloor = String(this.floorTransition.originFloor);
+        this.routes = this.floorTransition.stage1Routes || [];
+        if (this.routes.length > 0) {
+          this.selectRoute(0);
+        }
+        this.showNotification(
+          `No ${this.floorTransition.originFloorName}: siga até ${this.floorTransition.transitionName}.`,
+          'info'
+        );
+      }
+    },
+
+    /**
+     * Continua a rota no andar de destino a partir do elevador/escada até a sala final
      */
     continueRouteOnDestinationFloor() {
-      if (!this.floorTransition || !this.floorTransition.active) return;
-      const destFloor = this.floorTransition.destinationFloor;
-      const destElevator = this.floorTransition.elevatorDest;
-      const finalDest = this.floorTransition.finalDestinationNode;
+      this.switchFloorTransitionStage(2);
+    },
 
-      if (!finalDest) return;
-
-      this.setFloor(destFloor);
-      this.floorTransition.currentPhase = 'elevator_to_destination';
-
-      if (destElevator) {
-        const calculatedRoutes = this.routeEngine.findRoutes(
-          destElevator.id,
-          finalDest.id,
-          {
-            accessibilityMode: this.isAccessible,
-            maxAlternatives: 2
-          }
-        );
-
-        if (calculatedRoutes && calculatedRoutes.length > 0) {
-          this.routes = calculatedRoutes;
-          this.selectRoute(0);
-          this.showNotification(
-            `No ${this.floorTransition.destinationFloorName}: siga do ${destElevator.nome} até ${finalDest.nome} (${calculatedRoutes[0].totalDistance} m).`,
-            'success'
-          );
-          return;
-        }
-      }
-
-      this.showNotification(
-        `Você chegou ao ${this.floorTransition.destinationFloorName}. Prossiga até ${finalDest.nome}.`,
-        'info'
-      );
+    /**
+     * Retorna à etapa anterior no andar de origem
+     */
+    goToPreviousFloorStage() {
+      this.switchFloorTransitionStage(1);
     },
 
     /**
@@ -977,6 +1071,224 @@ export const useMainStore = defineStore('main', {
       } catch (e) {
         // Fallback silencioso
       }
+    },
+
+    /**
+     * Métodos do Painel do Administrador
+     */
+    openAdminModal() {
+      this.isAdminModalOpen = true;
+    },
+
+    closeAdminModal() {
+      this.isAdminModalOpen = false;
+    },
+
+    loadAdminOverrides() {
+      try {
+        const raw = localStorage.getItem('totem_admin_overrides');
+        if (raw) {
+          this.adminOverrides = JSON.parse(raw);
+        } else {
+          this.adminOverrides = {};
+        }
+      } catch (e) {
+        this.adminOverrides = {};
+      }
+    },
+
+    saveAdminOverrides() {
+      try {
+        localStorage.setItem('totem_admin_overrides', JSON.stringify(this.adminOverrides || {}));
+      } catch (e) {
+        console.error('Falha ao salvar admin overrides no localStorage', e);
+      }
+    },
+
+    applyAdminOverridesToGeoData() {
+      this.loadAdminOverrides();
+      const overrides = this.adminOverrides || {};
+
+      // Aplicar em salas
+      if (this.geoData.salas?.features) {
+        for (const feat of this.geoData.salas.features) {
+          const key = feat.properties?.id || feat.properties?.nome;
+          if (key && overrides[key]) {
+            Object.assign(feat.properties, overrides[key]);
+            if (overrides[key].ativo === false) {
+              feat.properties.status_bloqueado = true;
+            } else if (overrides[key].ativo === true && feat.properties.tipo_uso !== 'status_bloqueado') {
+              feat.properties.status_bloqueado = false;
+            }
+          }
+        }
+      }
+
+      // Aplicar em pontos
+      if (this.geoData.pontos?.features) {
+        for (const feat of this.geoData.pontos.features) {
+          const key = feat.properties?.id || feat.properties?.nome;
+          if (key && overrides[key]) {
+            Object.assign(feat.properties, overrides[key]);
+          }
+        }
+      }
+
+      // Aplicar em corredores
+      if (this.geoData.corredores?.features) {
+        for (const feat of this.geoData.corredores.features) {
+          const key = feat.properties?.id;
+          if (key && overrides[key]) {
+            Object.assign(feat.properties, overrides[key]);
+          }
+        }
+      }
+    },
+
+    /**
+     * Atualiza as propriedades 'ativo' e/ou 'acessivel' de um local ou componente
+     * @param {'salas'|'pontos'|'corredores'} category 
+     * @param {string} identifier - id ou nome da feature
+     * @param {Object} updates - { ativo?: boolean, acessivel?: boolean, tipo_uso?: string, nome?: string }
+     */
+    updateLocationProperty(category, identifier, updates) {
+      if (!identifier || !updates) return;
+
+      const dataset = this.geoData[category];
+      if (!dataset || !dataset.features) return;
+
+      const feat = dataset.features.find(
+        (f) => f.properties?.id === identifier || f.properties?.nome === identifier
+      );
+
+      if (!feat) return;
+      if (!feat.properties) feat.properties = {};
+
+      const key = feat.properties.id || feat.properties.nome || identifier;
+
+      // 1. Atualizar properties da feature GeoJSON
+      if (updates.ativo !== undefined) {
+        feat.properties.ativo = Boolean(updates.ativo);
+        if (updates.ativo === false) {
+          feat.properties.status_bloqueado = true;
+        } else if (feat.properties.tipo_uso !== 'status_bloqueado') {
+          feat.properties.status_bloqueado = false;
+        }
+      }
+
+      if (updates.acessivel !== undefined) {
+        feat.properties.acessivel = Boolean(updates.acessivel);
+        feat.properties.acessibilidade = String(Boolean(updates.acessivel));
+      }
+
+      if (updates.tipo_uso !== undefined) {
+        feat.properties.tipo_uso = updates.tipo_uso;
+      }
+
+      if (updates.nome !== undefined && updates.nome.trim()) {
+        feat.properties.nome = updates.nome.trim();
+      }
+
+      // 2. Persistir no adminOverrides
+      if (!this.adminOverrides) this.adminOverrides = {};
+      this.adminOverrides[key] = {
+        ...(this.adminOverrides[key] || {}),
+        ...updates
+      };
+      this.saveAdminOverrides();
+
+      // 3. Atualizar nós correspondentes no RouteEngine e em this.locations
+      if (this.locations) {
+        const loc = this.locations.find(
+          (l) => l.id === key || l.nome === key || l.rawName === key || (l.feature?.properties?.id === key)
+        );
+        if (loc) {
+          if (updates.ativo !== undefined) {
+            loc.isDisabled = !updates.ativo;
+            loc.ativo = Boolean(updates.ativo);
+          }
+          if (updates.acessivel !== undefined) {
+            loc.acessivel = Boolean(updates.acessivel);
+          }
+          if (updates.nome !== undefined) {
+            loc.nome = updates.nome.trim();
+          }
+        }
+      }
+
+      if (this.routeEngine && this.routeEngine.nodes) {
+        for (const [nodeId, node] of this.routeEngine.nodes) {
+          if (nodeId === key || node.nome === key || node.rawName === key || (node.feature?.properties?.id === key)) {
+            if (updates.ativo !== undefined) {
+              node.isDisabled = !updates.ativo;
+              node.ativo = Boolean(updates.ativo);
+            }
+            if (updates.acessivel !== undefined) {
+              node.acessivel = Boolean(updates.acessivel);
+            }
+            if (updates.nome !== undefined) {
+              node.nome = updates.nome.trim();
+            }
+          }
+        }
+
+        // Se for aresta de corredor, atualizar nas arestas
+        if (category === 'corredores' && this.routeEngine.adjList) {
+          for (const [, edges] of this.routeEngine.adjList) {
+            for (const edge of edges) {
+              if (edge.featureId === key || edge.from === key || edge.to === key) {
+                if (updates.acessivel !== undefined) edge.acessivel = Boolean(updates.acessivel);
+                if (updates.ativo !== undefined && !updates.ativo) edge.acessivel = false;
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Incrementar versão reativa para re-renderização imediata no Leaflet
+      this.adminDataVersion++;
+
+      // 5. Se houver rota traçada, recalcular
+      if (this.hasRoute && this.originNodeId && this.destinationNodeId) {
+        this.calculateRoute(false);
+      }
+
+      this.showNotification(`Item "${feat.properties.nome || key}" atualizado com sucesso!`, 'success');
+    },
+
+    /**
+     * Restaura todas as sobreposições de administrador para os padrões originais
+     */
+    resetAdminOverrides() {
+      try {
+        localStorage.removeItem('totem_admin_overrides');
+      } catch (e) {}
+      this.adminOverrides = {};
+      this.initApp();
+      this.showNotification('Padrões de fábrica restaurados com sucesso!', 'info');
+    },
+
+    /**
+     * Exporta os dados GeoJSON atualizados para download direto no navegador
+     */
+    exportGeoJSON(category = 'salas') {
+      const data = this.geoData[category];
+      if (!data) {
+        this.showNotification(`Dataset "${category}" não disponível para exportação.`, 'error');
+        return;
+      }
+
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/geo+json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${category}_atualizado.geojson`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      this.showNotification(`Arquivo ${category}_atualizado.geojson exportado!`, 'success');
     }
   }
 });

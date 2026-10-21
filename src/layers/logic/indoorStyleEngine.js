@@ -123,6 +123,19 @@ export const ROUTE_STYLES = {
     lineJoin: 'round',
     className: 'leaflet-route-neon-active' // Efeito animado e glow no CSS
   },
+  /**
+   * Linha da rota alternativa:
+   * Estilo visual diferenciado com linha tracejada e menor opacidade
+   */
+  alternativeRoute: {
+    color: '#64748B',               // Slate de contraste moderado
+    weight: 5,                      // 5px
+    opacity: 0.65,                  // Menor opacidade
+    dashArray: '8, 10',             // Linha tracejada
+    lineCap: 'round',
+    lineJoin: 'round',
+    className: 'leaflet-route-alternative'
+  },
   corredorBase: {
     color: '#94A3B8',
     weight: 2,

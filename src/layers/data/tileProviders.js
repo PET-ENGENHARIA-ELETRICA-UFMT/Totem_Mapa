@@ -4,7 +4,28 @@
  * Inclui configurações de maxNativeZoom para permitir super zoom sem perda de visualização.
  */
 
+export const MAPBOX_ACCESS_TOKEN =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MAPBOX_TOKEN) || '';
+
 export const TILE_PROVIDERS = {
+  'mapbox-streets': {
+    id: 'mapbox-streets',
+    name: 'Mapbox Streets (Oficial)',
+    tag: 'Mapbox API',
+    category: 'Vias',
+    desc: 'Cartografia moderna com estilo urbano refinado da Mapbox API v12.',
+    url: MAPBOX_ACCESS_TOKEN
+      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_ACCESS_TOKEN}`
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    subdomains: MAPBOX_ACCESS_TOKEN ? '' : 'abcd',
+    maxNativeZoom: 22,
+    tileSize: 256,
+    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    icon: 'fa-cube',
+    badgeClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+    previewBg: 'linear-gradient(135deg, #312e81 0%, #1e1b4b 100%)',
+    previewBorder: '#6366f1'
+  },
   'carto-positron': {
     id: 'carto-positron',
     name: 'Carto Claro (Positron)',
